@@ -6,3 +6,6 @@ reports/lint-report.md
 *.log
 .vitest-cache/
 .tmp_e2e/
+
+# Editor Local Workspace
+.claude/

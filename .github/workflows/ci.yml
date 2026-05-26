@@ -1,0 +1,59 @@
+# Self-CI for unified-agent-spec-core
+#
+# This is the SELF CI for the toolkit's own repository — it is unrelated to the
+# `agent-core-gate.yml` template under `src/templates/`, which is the workflow
+# that `agent-core init` injects into DOWNSTREAM projects.
+#
+# Six-step verification ladder, mirroring the local Builder/Tester gate:
+#   1. checkout      — bring in the working tree
+#   2. setup-node    — pin Node 20 + enable npm cache
+#   3. npm ci        — deterministic install from package-lock.json
+#   4. npm run build — tsc --noEmit (zero diagnostics required)
+#   5. npm run lint  — ESLint zero errors / zero warnings
+#   6. npm test      — vitest 75/75 green
+#   7. npm run scan  — Phase 1 Linter regression on the real inputs/
+#   8. npm run build:dist — emit dist/bin/agent-core.js + dist/templates/*
+#
+# Any non-zero exit blocks the merge.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: verify (tsc + lint + test + scan + dist)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Type check (tsc --noEmit)
+        run: npm run build
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Test (vitest — 75 tests)
+        run: npm test
+
+      - name: Linter regression scan (Phase 1)
+        run: npm run scan
+
+      - name: Production build (dist/bin + dist/templates)
+        run: npm run build:dist
