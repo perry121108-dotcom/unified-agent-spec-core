@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/market-research-ai/**)",
+      "Bash(node D:/unified-agent-spec-core/dist/bin/agent-core.js init)",
+      "Bash(npm run *)",
+      "Bash(echo \"APPEND_EXIT=$?\")",
+      "Bash(node D:/unified-agent-spec-core/dist/bin/agent-core.js check)",
+      "Bash(echo \"CHECK_EXIT=$?\")",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

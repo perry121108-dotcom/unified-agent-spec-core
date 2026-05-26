@@ -1,0 +1,136 @@
+{
+  "task_id": "phase6_upstream_orchestration_and_ci_gate",
+  "spec_version": "0.5.0",
+  "supersedes": "phase4_cli_packaging_and_self_bootstrapping",
+  "builder_session_completed_at": "2026-05-26T18:50:00Z",
+  "workspace": "D:/unified-agent-spec-core/",
+  "phase1_status": "Closed (PASS) — WORKLOG.md 2026-05-26T05:28:16Z",
+  "phase2_status": "Closed (PASS) — WORKLOG.md 2026-05-26T05:50:12Z",
+  "phase3_status": "Closed (PASS) — WORKLOG.md 2026-05-26T06:02:52Z",
+  "phase4_status": "Closed (PASS) — WORKLOG.md 2026-05-26T17:53:00Z",
+  "phase5_downstream_stamp": "D:/market-research-ai/shared/tester_input.json (compiled_at=2026-05-26T10:03:43Z, evidence_log_chars=1060)",
+  "changed_files_phase6": [
+    "package.json",
+    "src/templates/ci-workflow.tpl.yml",
+    "src/cli/bootstrap.ts",
+    "src/compiler/specCompiler.ts",
+    "src/bin/agent-core.ts",
+    "scripts/copy-assets.mjs",
+    "tests/integration/ciWorkflow.test.ts",
+    "tests/compiler/specBridge.test.ts",
+    "tests/integration/bootstrap.test.ts",
+    "TASK.md",
+    "WORKLOG.md",
+    "shared/tester_input.json"
+  ],
+  "bootstrap_commands": ["cd D:/unified-agent-spec-core", "npm install"],
+  "verification_commands": [
+    "npm run build",
+    "npm test",
+    "npm run lint",
+    "npm run scan",
+    "npm run build:dist"
+  ],
+  "expected_results": {
+    "npm run build": "exit 0; tsc --noEmit; zero diagnostics",
+    "npm test": "exit 0; Test Files 10 passed; Tests 75 passed (P1:13 + P2:13 + P3:19 + P4:12 + P6:18). Phase 6 增 18 tests ≥ 9，總數 75 ≥ 66。",
+    "npm run lint": "exit 0; zero errors zero warnings",
+    "npm run scan": "exit 0; Phase 1 Linter 引擎未退化 (scanned=22 findings=39 fail=33 warn=6)",
+    "npm run build:dist": "exit 0; emits dist/bin/agent-core.js + dist/templates/ci-workflow.tpl.yml + 既有模組"
+  },
+  "acceptance_criteria": [
+    {
+      "id": "AC-P6-01",
+      "statement": "tsc --noEmit 全綠（涵蓋 P1+P2+P3+P4+P6 全部 .ts）",
+      "command": "npm run build",
+      "expect_exit_code": 0
+    },
+    {
+      "id": "AC-P6-02",
+      "statement": "ESLint 零錯誤零警告",
+      "command": "npm run lint",
+      "expect_exit_code": 0
+    },
+    {
+      "id": "AC-P6-03",
+      "statement": "Vitest 75 tests 全綠；Phase 6 新增 ≥9 tests；累積 ≥66",
+      "command": "npm test",
+      "expect_exit_code": 0,
+      "expect_test_count": 75,
+      "expect_phase6_test_count_minimum": 9,
+      "expect_total_minimum": 66
+    },
+    {
+      "id": "AC-P6-04",
+      "statement": "src/templates/ci-workflow.tpl.yml 存在；npm run build:dist 後 dist/templates/ci-workflow.tpl.yml 亦存在",
+      "command": "npm run build:dist",
+      "expect_exit_code": 0,
+      "expect_file": "dist/templates/ci-workflow.tpl.yml"
+    },
+    {
+      "id": "AC-P6-05",
+      "statement": "runBootstrap 對乾淨 tmpdir 產出 .github/workflows/agent-core-gate.yml；YAML 內含 name: agent-core-gate / on.push.branches main+feature/* / on.pull_request / agent-core check 指令",
+      "verification": "tests/integration/ciWorkflow.test.ts (6 tests, all must pass)",
+      "expect_describe_tests_minimum": 6
+    },
+    {
+      "id": "AC-P6-06",
+      "statement": "agent-core init --spec <FeatureSpec.json> 將 suggested_specifications + risk_pain_points 100% 注入 TASK.md 為 marker-fenced 區塊；重跑為 idempotent",
+      "verification": "tests/compiler/specBridge.test.ts (12 tests, all must pass)",
+      "expect_describe_tests_minimum": 12
+    },
+    {
+      "id": "AC-P6-07",
+      "statement": "Phase 1 Linter 引擎未退化（scanned=22, findings=39, fail=33, warn=6）",
+      "command": "npm run scan",
+      "expect_exit_code": 0
+    },
+    {
+      "id": "AC-P6-08",
+      "statement": "黑箱端到端：使用編譯後 dist/bin/agent-core.js 對全新 tmpdir 執行 init --spec <FeatureSpec.json> + check 兩步驟皆 exit 0；TASK.md 中含 marker-fenced AC 區塊（<!-- agent-core:feature-spec-ac:begin -->…<!-- :end -->）",
+      "verification": "Builder 已於 /tmp/agent-core-p6-smoke 實證（見 WORKLOG 2026-05-26T18:30 區塊的 <Execution_Evidence>）；Tester 須以全新 tmpdir 復現"
+    }
+  ],
+  "artifacts": {
+    "cli_entry": "src/bin/agent-core.ts",
+    "bootstrap": "src/cli/bootstrap.ts",
+    "gate_hook": "src/cli/gateHook.ts",
+    "compiler": "src/compiler/specCompiler.ts",
+    "validator": "src/validator/schemaValidator.ts",
+    "state_machine": "src/config/agentWorkflowRegistry.ts",
+    "type_blueprint": "src/types/types.ts",
+    "ci_workflow_template": "src/templates/ci-workflow.tpl.yml",
+    "asset_copier": "scripts/copy-assets.mjs",
+    "phase6_integration_tests": "tests/integration/ciWorkflow.test.ts",
+    "phase6_compiler_tests": "tests/compiler/specBridge.test.ts",
+    "package_manifest": "package.json (version=0.5.0, bin.agent-core → ./dist/bin/agent-core.js)"
+  },
+  "phase6_design_summary": {
+    "ci_gate": "src/templates/ci-workflow.tpl.yml is the single source of truth for the cloud hard-block workflow. runBootstrap reads it via fileURLToPath(import.meta.url) with dual resolution (dist/templates with src/templates fallback) so dev (tsx) and prod (compiled) paths both work. scripts/copy-assets.mjs copies the template into dist on `npm run build:dist`. Output file: .github/workflows/agent-core-gate.yml (idempotent — never overwrites a downstream-customised workflow).",
+    "feature_spec_bridge": "src/compiler/specCompiler.ts now exports loadFeatureSpec(path) + compileFeatureSpecToAcceptanceCriteria(spec) + FEATURE_SPEC_AC_MARKERS. FeatureSpec items may be plain strings or {id, statement, severity}. Output is a marker-fenced Markdown block appended to TASK.md. Re-injection is idempotent — second pass detects the begin marker and skips. runBootstrap accepts BootstrapOptions.featureSpecPath; agent-core init accepts --spec <path> or --spec=<path>.",
+    "spec_version_bump": "0.4.0 → 0.5.0 across package.json, agent-governance.json, bootstrap seed, and SPEC_ID (unified-agent-spec-core@phase6).",
+    "test_growth": "Phase 6 adds 18 tests (ciWorkflow:6 + specBridge:12), bringing cumulative from 57 → 75 (≥ 66 threshold)."
+  },
+  "real_test_summary_phase6": {
+    "files_passed": 10,
+    "total_tests_passed": 75,
+    "phase1_tests": 13,
+    "phase2_tests": 13,
+    "phase3_tests": 19,
+    "phase4_tests": 12,
+    "phase6_tests": 18,
+    "phase6_breakdown": {
+      "ci_workflow_describe": 6,
+      "load_feature_spec_describe": 5,
+      "compile_feature_spec_describe": 3,
+      "run_bootstrap_spec_integration_describe": 4
+    }
+  },
+  "known_limitations": [
+    "[Phase 1-4 殘留] 詳見前期 known_limitations（dist/ ESM、Windows DEP0190 informational warning、runBootstrap 無 --force、CLI 無 --cwd）",
+    "[Phase 6 新增] 出廠 CI workflow 採 `npm install --no-save unified-agent-spec-core || true` 作為 best-effort 安裝路徑；monorepo / submodule 等替代供應方式需 downstream 自行客製，再次執行 runBootstrap 會略過用戶修改（idempotent）。",
+    "[Phase 6 新增] FeatureSpec AC 區塊一律附加於 TASK.md 末端而非插入既有 Phase 區塊內，作者可手動拖移位置；marker 內容不可移除，否則 idempotency 偵測會失效並導致重複注入。",
+    "[Phase 6 新增] loadCiWorkflowTemplate() 若 dist/templates 與 src/templates 雙路徑皆不存在則 throw（desired failure mode：template 不在 = 壞 build）；下游若僅取 dist/ 必須確保 `npm run build:dist` 完整跑過 copy-assets 步驟。"
+  ],
+  "handover_protocol_note": "Builder Phase 6 Session 已暫停。請開啟全新 Tester Session 進行驗收。依 acceptance_criteria 順序執行 verification_commands；5 條命令必須 exit=0、總測試 75。預期 dist/bin/agent-core.js + dist/templates/ci-workflow.tpl.yml 均已成功產出。AC-P6-08 之黑箱 E2E 必須於全新 tmpdir 復現（init --spec → check 皆 exit 0；TASK.md 含 marker-fenced AC 區塊）。"
+}

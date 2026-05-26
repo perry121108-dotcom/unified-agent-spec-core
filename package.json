@@ -1,0 +1,27 @@
+{
+  "name": "unified-agent-spec-core",
+  "version": "0.5.1",
+  "description": "Unified Agent Spec Core — strong-typed governance CLI for AI multi-agent SOP workflows (Phases 1-8).",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "agent-core": "./dist/bin/agent-core.js"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "build:dist": "tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
+    "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "test": "vitest run",
+    "scan": "tsx src/linter/index.ts",
+    "gate": "tsx src/cli/gateHook.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  }
+}
