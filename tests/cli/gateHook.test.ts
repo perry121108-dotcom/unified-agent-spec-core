@@ -214,6 +214,90 @@ describe('runGate — programmatic core (no process.exit)', () => {
   });
 });
 
+describe('runGate — Phase 12 pre-flight architecture plan gate', () => {
+  const TASK_WITH_PLAN = '# TASK\n- [x] ARCH_PLAN phase-12: build the gate\n- [/] T12.1\n';
+
+  it('PRE-FLIGHT PASS: src/ mutation declared via injected mutationsOverride + checked ARCH_PLAN in TASK.md → falls through to existing semantic gate', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    // Re-write TASK.md to include the checked ARCH_PLAN bullet so the
+    // pre-flight gate releases.
+    writeFileSync(join(ws, 'TASK.md'), TASK_WITH_PLAN, 'utf8');
+
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['src/cli/gateHook.ts'],
+    });
+    expect(res.exitCode).toBe(0);
+    expect(res.errors).toEqual([]);
+  });
+
+  it('PRE-FLIGHT BLOCK: src/ mutation injected but no ARCH_PLAN in TASK.md → exitCode 1, [ILLEGAL_MUTATION] error, no stamp written', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    // Default setupWorkspace TASK.md is `# TASK\n- [/] something\n` — no plan.
+
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['src/cli/gateHook.ts', 'src/validator/archPlanValidator.ts'],
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.errors[0]).toMatch(/\[ILLEGAL_MUTATION\]/);
+    expect(res.errors[0]).toContain('src/cli/gateHook.ts');
+    expect(res.errors[0]).toContain('ARCH_PLAN');
+    // Critical: NO stamp written despite VALID_LOG being present — the
+    // pre-flight aborted before the oracle even ran.
+    const stamped = JSON.parse(
+      readFileSync(join(ws, 'shared/tester_input.json'), 'utf8'),
+    );
+    expect(stamped.latest_compiled_payload).toBeUndefined();
+  });
+
+  it('PRE-FLIGHT PASSTHROUGH: pure-docs mutation (TASK.md + WORKLOG.md) → does NOT trip ARCH_PLAN even without plan; standard handoff flow proceeds', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    // No ARCH_PLAN in TASK.md, but only docs are "mutated" — zero-misfire.
+
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['TASK.md', 'WORKLOG.md', 'README.md'],
+    });
+    expect(res.exitCode).toBe(0);
+    expect(res.errors).toEqual([]);
+  });
+
+  it('PRE-FLIGHT GRACEFUL DEGRADATION: when mutationsOverride is unset and workspaceRoot is not a git repo (mkdtempSync fixture), getWorkspaceMutations returns [] and the gate passes through transparently', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    // No mutationsOverride supplied — exercises the real getWorkspaceMutations
+    // path. The tmp fixture is NOT a git repo, so git diff exits non-zero
+    // and the merged path list is empty → ARCH_PLAN check is vacuous.
+    const res = runGate({ workspaceRoot: ws });
+    expect(res.exitCode).toBe(0);
+    expect(res.errors).toEqual([]);
+  });
+});
+
 describe('gateHook — subprocess hard-block (process.exit verification)', () => {
   it('exits with code 1 when run as a script against a defective workspace', () => {
     const ws = setupWorkspace({

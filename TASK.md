@@ -99,3 +99,13 @@
 - [/] **T11.1** 在 `src/validator/semanticValidator.ts` 內定義強型別 `TestParserStrategy` 介面（`name` / `detect` / `countScannedTicks` / `extractDeclaredPassed` / `collectTestFileRefs`），將既有 Vitest 邏輯遷移為 `VitestStrategy`，並依序實作 `PytestStrategy` / `JestStrategy` / `CargoStrategy`；建置 mutex 安全的調度工廠 `getStrategy(evidenceText)`，無錨點匹配時拋 `[CRITICAL_FORGERY] Unknown or unsupported test runner log structure.`
 - [/] **T11.2** 全面擴充 `tests/validator/semanticValidator.test.ts`：保留 Phase 10 既有 15 案 100% 通過；為 Pytest / Jest / Cargo 三大新策略各追加 PASS 正例 + FORGERY 負例 + EMPTY pure-summary 結構缺陷 + CRLF 雙行尾相容案例（每框架 ≥4 案），並新增 factory mutex 識別斷言 ≥7 案，semanticValidator.test.ts 累積案數從 15 → 37
 - [/] **T11.3** Builder Phase 11 自測：`npm run build` + `npm run lint` + `npm test` + `npm run scan` + `npm run build:dist` 五重門禁全綠；總測試案數從 90 → 112（增加 22 案，超過 spec 要求的 12 案下限），達成 spec「應達 100 案以上」目標
+
+## Phase 12: 前置設計錨定門禁 (Pre-flight Architecture Plan Gate)
+
+> Phase 12 啟動：2026-05-27T16:55:00Z（Builder / Principal Architect 角色）
+> 任務範圍：把治理閘口從「事後驗證(post-facto evidence audit)」往前推一階,進化為「事前設計錨定(pre-flight architecture plan gate)」。當 Builder 代理人企圖在「未先勾選 ARCH_PLAN 設計意圖」的情況下直接 mutate 源碼,gateHook 必須在語意防偽 oracle 之前先做「雙階段判別」並以 `[ILLEGAL_MUTATION]` 物理阻斷,逼迫代理人先思考、後動工。
+
+- [x] ARCH_PLAN phase-12: implement pre-flight architecture plan gate (archPlanValidator + getWorkspaceMutations + dual-banner) so source mutations without a vetted plan are physically blocked before the Phase 10/11 semantic oracle ever fires; dogfood the gate on its own enabling commit
+- [ ] T12.1 於 `src/cli/gateHook.ts` 實作雙階段 (Pre-flight / Post-facto) 門禁辨識機制 [/]
+- [ ] T12.2 新增 `ARCH_PLAN` 剛性不變式，若偵測到源碼變更且計畫未勾選，直接拋出 [ILLEGAL_MUTATION] 物理阻斷 [/]
+- [ ] T12.3 於 `tests/` 追加 10 案以上前置設計阻斷黑箱負例測試，執行 5-Gate 本地回歸 [/]

@@ -89,7 +89,29 @@ function main(argv: string[]): number {
         );
       } else {
         for (const err of res.errors) {
-          if (err.startsWith('[CRITICAL_FORGERY]')) {
+          if (err.startsWith('[ILLEGAL_MUTATION]')) {
+            // Phase 12 — pre-flight architecture plan gate rejected an
+            // undeclared source mutation. High-contrast banner; no
+            // compliance stamp was written.
+            // eslint-disable-next-line no-console
+            console.error('');
+            // eslint-disable-next-line no-console
+            console.error('================================================================');
+            // eslint-disable-next-line no-console
+            console.error('=== ILLEGAL MUTATION DETECTED - HARD BLOCK ===');
+            // eslint-disable-next-line no-console
+            console.error('================================================================');
+            // eslint-disable-next-line no-console
+            console.error(err);
+            // eslint-disable-next-line no-console
+            console.error('================================================================');
+            // eslint-disable-next-line no-console
+            console.error('  No compliance stamp written to shared/tester_input.json.');
+            // eslint-disable-next-line no-console
+            console.error('  Append `- [x] ARCH_PLAN <slug>: <intent>` to TASK.md and re-run.');
+            // eslint-disable-next-line no-console
+            console.error('================================================================');
+          } else if (err.startsWith('[CRITICAL_FORGERY]')) {
             // Phase 10 — semantic forgery oracle rejected the evidence.
             // High-contrast banner; no compliance stamp was written.
             // eslint-disable-next-line no-console

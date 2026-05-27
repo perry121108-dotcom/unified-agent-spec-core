@@ -1798,3 +1798,52 @@ $ npm test
 </Execution_Evidence>
 
 - **預期下一步**：Tester Session 接手執行 5 道閘口(build / lint / test / scan / build:dist),確認 Phase 11 三條任務 `[/]` → `[x]`。
+
+---
+
+## 2026-05-27T16:55:00Z — Builder / Principal Architect Phase 12 啟動
+
+- **角色**：Builder / Principal Architect
+- **任務**：T12.1 ~ T12.3 — 前置設計錨定門禁鋪軌（Pre-flight Architecture Plan Gate)
+- **狀態**：[/] 進行中（鐵軌已鋪設,T12.x 三條任務登錄為 `[/]`,Builder 不自勾 `[x]`)
+
+### Phase 12 立論
+
+Phase 10 與 Phase 11 解決了「**事後**」的測試證據偽造攔截 —— `<Execution_Evidence>` 區塊在 Builder 已經改完源碼、跑完(或宣稱跑完)測試之後,被 `semanticValidator` 拿去做代數核對。這條防線雖然剛性,但晚了一拍:
+
+> Builder 代理人**已經**動過源碼,治理閘口才在事後審判 log 是否偽造。
+> 真正的災難不在「log 偽造」,而在「動工前根本沒思考過架構」。
+
+Phase 12 把閘口往前推一階,實作**「前置設計錨定」**:
+
+- 在任何源碼 mutation 被允許之前,必須先在治理文件中存在一份**已勾選**的 `ARCH_PLAN`(設計意圖宣告)
+- `gateHook` 升級為**雙階段判別**:
+  - **Pre-flight 階段**:對比 working tree 與 HEAD 的 diff,若 `src/**/*.ts` 有變更,則必須存在已勾選的 `ARCH_PLAN` 標記
+  - **Post-facto 階段**:Phase 10/11 既有的 `<Execution_Evidence>` 語意防偽 oracle 流程(不變)
+- 若 Pre-flight 失敗 → 拋 `[ILLEGAL_MUTATION] source mutation detected without prior ARCH_PLAN checkmark` → `process.exit(1)` → 不寫合規戳記
+
+### 設計鐵律(預先固化,實作時不得退讓)
+
+1. **ARCH_PLAN 形狀契約**:`TASK.md` 或專門的 `shared/arch_plan.md` 內必須有形如 `- [x] ARCH_PLAN <slug>: <one-line intent>` 的勾選 bullet,且 slug 必須對應到當前 working branch 名稱或最新 phase
+2. **雙階段順序**:Pre-flight 必須在 semanticValidator 之前執行,讓「沒設計就動工」的代理人在 oracle 都還沒有機會 fire 之前就被砍掉
+3. **物理阻斷錯誤碼**:`[ILLEGAL_MUTATION]` 與 `[CRITICAL_FORGERY]` 嚴格區分 —— 前者打擊「設計缺失」,後者打擊「執行偽造」;不得用同一條訊息囊括
+4. **零誤殺**:Pre-flight 必須對**純文件變更**(TASK.md / WORKLOG.md / README.md / *.json 等非 `src/**/*.ts` 路徑)完全透明,否則治理流程自身會死鎖
+5. **可逆撤回**:`shared/tester_input.json` 在 Pre-flight 失敗時**絕對不寫戳記**,讓代理人可以補完 ARCH_PLAN 後重跑 `agent-core check` 直接放行
+
+### 任務鋪軌
+
+| Task | 範圍 | 預期交付 |
+|---|---|---|
+| T12.1 | `src/cli/gateHook.ts` 升級為雙階段 (Pre-flight / Post-facto) 判別 | 新函式 `runPreflight()` + `runGate()` 重構為 `runPreflight → runPostfacto` 串接 |
+| T12.2 | 新增 `ARCH_PLAN` 不變式 + `[ILLEGAL_MUTATION]` 拋出 | 新檔案 `src/validator/archPlanValidator.ts` 含 `assertArchPlanConsistency(diffPaths, taskMd): void` |
+| T12.3 | 至少 10 案前置設計阻斷黑箱負例測試 + 5-Gate 回歸全綠 | `tests/validator/archPlanValidator.test.ts`(≥7)+ `tests/cli/gateHook.preflight.test.ts`(≥3) |
+
+### 不變式收益清單(交付完成後將擁有)
+
+- 「動工前沒思考」的偷懶模式被物理消滅
+- ARCH_PLAN 自身亦受 R3 Evidence Contract 規則約束,形成**遞迴自舉治理**
+- Pre-flight + Post-facto 雙閘並列,徹底覆蓋 AI 代理人「沒設計亂動」與「偽造證據」兩大失敗模式
+
+### 預期下一步
+
+T12.1 起動,實作 `src/cli/gateHook.ts` 的雙階段重構與 `archPlanValidator` 模組。所有 mutation 都會在 `git diff` 受到自我審視之後才寫入 — Phase 12 將是首個「會審判自己 patch 的 Phase」。
