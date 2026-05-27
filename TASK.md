@@ -90,3 +90,12 @@
 - [/] **T10.1** 於 `prompts/adversarial_auditor.txt` 建立隔離的對抗性稽核規範（御用反對者人格契約 — Vitest verbose 軌跡 / per-file ↔ aggregate 等式 / 時間與 PID 合理性 / 詞法 AI 拼湊破綻）
 - [/] **T10.2** 於 `src/validator/semanticValidator.ts` 實作語意與結構斷言引擎 `validateLogStructure(evidenceText)`：文本抽取（`<Execution_Evidence>` 解包）+ 微觀行掃描（`✓` 符號計數 + `tests/*.test.ts` 路徑抽取）+ 宏觀摘要提取（`Tests N passed (N)`）+ 剛性數學不變式斷言（mismatch ⇒ `[CRITICAL_FORGERY]` 拋出）；CRLF/LF 雙行尾相容
 - [/] **T10.3** 將防偽閘口掛載至 `src/cli/gateHook.ts` 之 `runGate`：於 schemaValidator 前強制執行語意追蹤；觸發偽造 ⇒ 高對比度錯誤橫幅 + `process.exit(1)` 硬性阻斷 + 不寫入合規戳記；更新 `tests/cli/gateHook.test.ts` 與 `tests/integration/bootstrap.test.ts` 之 VALID_LOG 為 Phase-10-compliant fixture（per-case ✓ 與 declared total 完全等式）；新增 `tests/validator/semanticValidator.test.ts` 共 14 案（PASS 路徑 3 + FORGED 路徑 5 + 計數/解包工具 5 + 錯誤訊息診斷 1）
+
+## Phase 11 — 多語言日誌解析器與策略模式重構（Multi-language Evidence Parser）
+
+> Phase 11 啟動：2026-05-27T16:30:00Z（Builder / Principal Architect 角色）
+> 任務範圍：將 Phase 10 與 Vitest 緊耦合的語意防偽神諭核心 `semanticValidator` 解耦，採用「策略模式 (Strategy Pattern)」建置通用多語言日誌解析工廠。依序實作 Vitest（既有遷移）、Pytest、Jest、Cargo test 四大生態系的特徵偵測（mutex anchor）、每案 tick 計數、宣告總量提取與檔案參照收集；確保 Phase 10 既有 15 案 Vitest 門禁機制 100% 向下相容。
+
+- [/] **T11.1** 在 `src/validator/semanticValidator.ts` 內定義強型別 `TestParserStrategy` 介面（`name` / `detect` / `countScannedTicks` / `extractDeclaredPassed` / `collectTestFileRefs`），將既有 Vitest 邏輯遷移為 `VitestStrategy`，並依序實作 `PytestStrategy` / `JestStrategy` / `CargoStrategy`；建置 mutex 安全的調度工廠 `getStrategy(evidenceText)`，無錨點匹配時拋 `[CRITICAL_FORGERY] Unknown or unsupported test runner log structure.`
+- [/] **T11.2** 全面擴充 `tests/validator/semanticValidator.test.ts`：保留 Phase 10 既有 15 案 100% 通過；為 Pytest / Jest / Cargo 三大新策略各追加 PASS 正例 + FORGERY 負例 + EMPTY pure-summary 結構缺陷 + CRLF 雙行尾相容案例（每框架 ≥4 案），並新增 factory mutex 識別斷言 ≥7 案，semanticValidator.test.ts 累積案數從 15 → 37
+- [/] **T11.3** Builder Phase 11 自測：`npm run build` + `npm run lint` + `npm test` + `npm run scan` + `npm run build:dist` 五重門禁全綠；總測試案數從 90 → 112（增加 22 案，超過 spec 要求的 12 案下限），達成 spec「應達 100 案以上」目標

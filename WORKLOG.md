@@ -1725,3 +1725,76 @@ Builder 不勾選 `[x]`，T10.1 ~ T10.3 維持 `[/]`。
 
 
 
+
+---
+
+## 2026-05-27T16:30:00Z — Builder / Principal Architect Phase 11 啟動
+
+- **角色**：Builder / Principal Architect
+- **任務**：T11.1 ~ T11.3 — 將 `semanticValidator` 由 Vitest 緊耦合重構為多語言策略模式
+- **狀態**：[/] 進行中（Builder 不自勾 `[x]`，等待 Tester 接手驗收）
+
+### 設計決策紀錄
+
+1. **策略介面 `TestParserStrategy`**（強型別最小介面）
+   - `name: string` — 穩定識別碼，灌入 SemanticReport.strategy 與診斷錯誤訊息
+   - `detect(text): boolean` — 唯一錨點(anchor)；矩陣全域 mutex（任一文本至多被一個策略宣稱）
+   - `countScannedTicks(text): number` — 每案成功標記計數
+   - `extractDeclaredPassed(text): number` — 宣告 passed 總數;-1 sentinel 表示無摘要行
+   - `collectTestFileRefs(text): string[]` — runner-shaped 檔案 / 測試引用,作為 pure-summary forgery 防線
+
+2. **mutex 矩陣與檢測優先序**：Jest → Pytest → Cargo → Vitest（在 `STRATEGIES` 常量內固化）
+   - Jest 必須先於 Vitest：兩者都產生 `✓` per-case markers,只有 Jest 有 `Test Suites:` 錨點
+   - Pytest `test session starts` / Cargo `running N tests` 為獨佔錨點,順序中性
+   - Vitest 為 fall-through：`Test Files` 或 canonical `Tests N passed (N)` 形式
+   - 全部 miss ⇒ 拋 `[CRITICAL_FORGERY] Unknown or unsupported test runner log structure.`
+
+3. **每框架正則設計矩陣**（mutex 安全的根據）
+
+   | 框架 | detect | countScannedTicks | extractDeclaredPassed | collectTestFileRefs |
+   | --- | --- | --- | --- | --- |
+   | vitest | `/Test Files\s+\d+/` ∨ `/(?:^|\n)\s*Tests\s+(\d+)\s+passed\s*\(\d+\)/i` | `/^\s*✓\s+\S.*$/gm` | 同 detect 第二式 | `/tests\/[A-Za-z0-9_\-./]+\.test\.ts/g` |
+   | pytest | `/test session starts/` | `/^.*PASSED.*$/gm` | `/=+\s+(\d+)\s+passed[^=]*=+/` | `/[A-Za-z0-9_\-./]+\.py::[A-Za-z0-9_]+/g` |
+   | jest | `/Test Suites:/` | `/^\s*[✓✔]\s+\S.*$/gm` | `/Tests:\s+(\d+)\s+passed/` | `/[A-Za-z0-9_\-./]+\.(?:test|spec)\.[jt]sx?/g` |
+   | cargo | `/running \d+ tests?/` | `/^test\s+.*\s+\.\.\.\s+ok$/gm` | `/test result:\s+ok\.\s+(\d+)\s+passed/` | `/^test\s+([A-Za-z0-9_:]+)\s+\.\.\.\s+ok$/gm` 之 capture group |
+
+   - Vitest 偵測**故意**收緊到「`Test Files`」或「`Tests  N passed (N)`」雙嚴格錨點(非寬鬆 `Tests` 子字串),以避免 Jest 之 `Tests:` 行誤觸；Jest 的 `Tests:` 因 `:` 不匹配 `\s+` 故不會被 Vitest summary 正則捕捉。
+   - Jest 寬容 U+2713 (`✓`) 與 U+2714 (`✔`) 雙形式,涵蓋預設 reporter 與自訂 reporter。
+   - Pytest 之 `PASSED` 為全大寫,與 summary 的小寫 `passed` 字面相異,故同一 body 內計數不衝突。
+   - Cargo 之檔案參照採「qualified test path」替身（如 `parser::tests::detects_anchor`）,因 Rust 測試結構無 .test.rs 概念。
+
+4. **向下相容鐵律**
+   - `analyzeLogStructure(evidenceText)` 維持 Vitest-bound 純計數語意（既有 Phase 10 測試的合約）：內部委派至 `VitestStrategy.{countScannedTicks, extractDeclaredPassed, collectTestFileRefs}`,行為 bit-for-bit 等價。
+   - `validateLogStructure(evidenceText)` 升級為策略感知,但回傳型別仍為 `SemanticReport`（新增 `strategy: string` 欄位,既有欄位語意不變）。
+   - `src/cli/gateHook.ts` 之 `runGate` 呼叫端零改動：原本只使用 throw 側效應,SemanticReport 回傳值未被消費。
+   - Phase 1-10 之 `Closed by Tester @ ...` 結案戳記完好保留,未篡改任一字元。
+
+5. **錯誤訊息精化**：所有 `[CRITICAL_FORGERY]` 訊息現一律嵌入 `Runner=<name>` 子字串,便於下游診斷快速識別框架類型。既有 Phase 10 測試 `expect(msg).toContain('75'); expect(msg).toContain('2');` 仍通過（數字嵌入不變）。
+
+### 執行證據（Builder 自測,Phase 11 唯一回歸閘）
+
+<Execution_Evidence>
+$ npm test
+> vitest run
+
+ RUN  v1.6.1 D:/unified-agent-spec-core
+
+ ✓ tests/validator/semanticValidator.test.ts  (37 tests) 13ms
+ ✓ tests/linter/evidenceContract.test.ts  (3 tests) 6ms
+ ✓ tests/compiler/specCompiler.test.ts  (10 tests) 7ms
+ ✓ tests/linter/promptInlineStragglers.test.ts  (4 tests) 7ms
+ ✓ tests/validator/schemaValidator.test.ts  (13 tests) 20ms
+ ✓ tests/linter/lifecycleMatrix.test.ts  (4 tests) 8ms
+ ✓ tests/integration/ciWorkflow.test.ts  (6 tests) 57ms
+ ✓ tests/compiler/specBridge.test.ts  (12 tests) 68ms
+ ✓ tests/linter/index.scan.test.ts  (2 tests) 30ms
+ ✓ tests/cli/gateHook.test.ts  (9 tests) 506ms
+ ✓ tests/integration/bootstrap.test.ts  (12 tests) 952ms
+
+ Test Files  11 passed (11)
+      Tests  112 passed (112)
+   Start at  16:35:24
+   Duration  1.43s
+</Execution_Evidence>
+
+- **預期下一步**：Tester Session 接手執行 5 道閘口(build / lint / test / scan / build:dist),確認 Phase 11 三條任務 `[/]` → `[x]`。
