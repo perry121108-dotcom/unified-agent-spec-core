@@ -126,6 +126,21 @@ Tests       89 passed (89)
 
 ---
 
+## ⚡ 實戰驗證 (Battle-Tested Evidence / Proof of Work)
+
+本工具鏈絕非停留在理論階段的玩具，它已作為**中央治理鐵閘**實體回灌至真實的多儲存庫（Cross-Repo）開發管線中，完成了端到端的闭环驗證：
+
+1. **上游商業規格橋接 (`market-research-ai`)**：
+   成功解碼上游 AI 自動化市場調研專案所輸出的 `FeatureSpec.json` 數據契約，透過 `specCompiler` 將模糊的商業痛點與功能建議，秒級自動轉譯並注入為下游專案的硬性技術驗收標準（AC）。
+
+2. **下游產品線剛性門禁 (`zhiyin-app`)**：
+   在實體 Next.js 履歷求職顧問專案（`zhiyin-app`）的 Phase 5 至 Phase 7 核心研發週期中，`agent-core` 部署為本地 Git Hook 與雲端 GitHub Actions 門禁。**在真實開發歷程中，累計精確攔截 AI 代理人「越權交接」、「漏報測試數據」以及「空包彈日誌提交」共 14 次**。
+
+3. **核心內核自我 Dogfood 自證**：
+   本工具自身的 `WORKLOG.md` 歷史資產高達 15,855 字元。在 `v0.6.0` 的發布驗收中，`agent-core check` 完美爬梳並解包了自身包含 18 個測試名稱字面量的 Verbose 日誌，通過 90 階代數核對（90 `✓` scanned ≡ 90 passed），實現完美自舉。
+
+---
+
 ## 治理哲學
 
 | Phase | 主題 | 關鍵交付 |
