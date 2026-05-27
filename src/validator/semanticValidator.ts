@@ -106,7 +106,12 @@ function uniq(arr: string[]): string[] {
 
 const VITEST_SUMMARY = /(?:^|\n)\s*Tests\s+(\d+)\s+passed\s*\(\d+\)/i;
 const VITEST_TICK = /^\s*✓\s+\S.*$/gm;
-const VITEST_FILE_REF = /tests\/[A-Za-z0-9_\-./]+\.test\.ts/g;
+// Phase 14 hot-fix (v0.8.1): broadened from the original `tests/` hard-lock
+// to accept any directory prefix and any of .ts/.tsx/.js/.jsx so inline-test
+// conventions (Next.js / Vite typical `src/**/*.test.ts`) also satisfy the
+// "pure-summary forgery" check. The constraint that the path SHAPE looks like
+// a JS/TS test file (`.test.<ext>`) remains intact.
+const VITEST_FILE_REF = /[A-Za-z0-9_\-./]+\.test\.[jt]sx?/g;
 const VITEST_DETECT_FILES = /Test Files\s+\d+/;
 
 export const VitestStrategy: TestParserStrategy = {

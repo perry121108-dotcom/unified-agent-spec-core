@@ -119,3 +119,11 @@
 - [x] T13.1 於 `src/linter/codeSlopLinter.ts` 實作字串與註釋逃逸感知的大括號深度狀態機 [Closed by Tester @ 2026-05-27]
 - [x] T13.2 將 `analyzeCodeSlop` 閘口掛載至 `gateHook.ts` 的 Pre-flight 流水線中，攔截 `[CODE_SLOP_DETECTED]` [Closed by Tester @ 2026-05-27]
 - [x] T13.3 於 `tests/` 追加 10 案以上程式碼密度正負例單元測試，執行 5-Gate 本地回歸 [Closed by Tester @ 2026-05-27]
+
+## Phase 14 — Vitest Inline-Test Regex Hot-fix (v0.8.1)
+
+> 啟動：2026-05-27T22:30:00Z（Principal Architect / Release Engineer）
+> 任務範圍：Phase 11 `VITEST_FILE_REF` 正則硬鎖 `tests/` 前綴,無法接受 Next.js / Vite 慣用的 `src/**/*.test.ts(x)` inline-test 慣例。本 hot-fix 拓寬正則為通用 `/[A-Za-z0-9_\-./]+\.test\.[jt]sx?/g`,涵蓋任何目錄前綴與 `.test.ts/tsx/js/jsx` 後綴。
+
+- [x] ARCH_PLAN phase-14-hotfix: broaden vitest regex for inline tests
+- [/] T14.1 修 `src/validator/semanticValidator.ts` 之 `VITEST_FILE_REF`;新增 ≥1 案 regression test 覆蓋 inline-test 路徑(src/lib + .tsx 變體);累積測試 166 → ≥167;5-Gate 全綠;tag v0.8.1

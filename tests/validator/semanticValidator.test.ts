@@ -452,3 +452,45 @@ describe('semanticValidator — CargoStrategy (Phase 11)', () => {
     );
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* Phase 14 — Vitest inline-test path regression (v0.8.1 hot-fix)             */
+/* -------------------------------------------------------------------------- */
+
+describe('semanticValidator — VitestStrategy inline-test path support (Phase 14 hot-fix)', () => {
+  const INLINE_VITEST_BLOCK = `
+ RUN  v4.1.7 D:/sample-nextjs-app
+
+ ✓ src/lib/system-prompt.test.ts > suite > case A 1ms
+ ✓ src/lib/chat-flow.test.ts > derivePhase > case B 0ms
+
+ Test Files  2 passed (2)
+      Tests  2 passed (2)
+`;
+
+  it('PASS: validateLogStructure accepts Next.js-style inline test paths (src/**/*.test.ts) without throwing', () => {
+    expect(() => validateLogStructure(INLINE_VITEST_BLOCK)).not.toThrow();
+  });
+
+  it('VitestStrategy.collectTestFileRefs surfaces inline test paths beyond the legacy tests/ prefix', () => {
+    const refs = VitestStrategy.collectTestFileRefs(INLINE_VITEST_BLOCK);
+    expect(refs).toEqual(
+      expect.arrayContaining([
+        'src/lib/system-prompt.test.ts',
+        'src/lib/chat-flow.test.ts',
+      ]),
+    );
+  });
+
+  it('VitestStrategy.collectTestFileRefs still matches legacy tests/<path>.test.ts (back-compat)', () => {
+    const legacy = ` ✓ tests/cli/gateHook.test.ts > runGate — sample 1ms\n Tests  1 passed (1)`;
+    const refs = VitestStrategy.collectTestFileRefs(legacy);
+    expect(refs).toContain('tests/cli/gateHook.test.ts');
+  });
+
+  it('VitestStrategy.collectTestFileRefs accepts .test.tsx (React component tests)', () => {
+    const reactLog = ` ✓ src/components/Button.test.tsx > renders > primary 1ms\n Tests  1 passed (1)`;
+    const refs = VitestStrategy.collectTestFileRefs(reactLog);
+    expect(refs).toContain('src/components/Button.test.tsx');
+  });
+});
