@@ -1858,3 +1858,53 @@ T12.1 起動,實作 `src/cli/gateHook.ts` 的雙階段重構與 `archPlanValidat
 - 核心引擎通過遞迴自舉（Meta-recursive Dogfooding）驗證。
 
 > Phase 12 結案狀態：**Closed by Tester @ 2026-05-27**（五重機器驗證 exit=0 × 5；Test Files 12 passed / Tests 142 passed；`grep -c DEP0190 = 0`；scan baseline `scanned=22 findings=39 fail=33 warn=6` 與 Phase 11 逐字節一致；建立鐵閘的 commit `5a62277` 本身先通過該鐵閘 — Meta-recursive Dogfooding 自證）
+
+---
+
+## 2026-05-27T20:00:00Z — Builder / Principal Architect Phase 13 啟動
+
+- **角色**：Builder / Principal Architect
+- **任務**：T13.1 ~ T13.3 — 決定性代碼密度神諭 (Deterministic Code Slop Linter)
+- **狀態**：[/] 進行中（鐵軌已鋪設,Builder 不自勾 `[x]`,等待 Tester 接手驗收）
+
+### Phase 13 立論
+
+Phase 12 解決了「動工前有沒有思考」的問題（intent gate）。Phase 13 解決下一層：「動工後寫出來的代碼幾何形狀對不對」的問題（geometric gate）。AI 代理人傾向產出「看起來像代碼但實質是肥皂泡」的 slop —— 深度 7 層的金字塔 if 巢狀、跨越 200 行的巨型函式、複製貼上灌水的 boilerplate。Phase 13 用兩條剛性幾何不變式對所有 working tree 異動的 `.ts` / `.js` 檔案做字元級狀態機掃描,直接物理阻斷。
+
+### 設計鐵律（已完成實作鎖死）
+
+1. **MAX_NESTING_DEPTH = 4**:大括號 `{}` 嵌套深度新增後 > 4 即報 `MAX_DEPTH_EXCEEDED`
+2. **MAX_BLOCK_LINES = 60**:任一對稱 `{...}` 內部 STRICTLY BETWEEN 開閉行的「有效行數」(非純空白且非純註解) > 60 即報 `MAX_BLOCK_LINES_EXCEEDED`
+3. **字串/註解逃逸**:字元級狀態機 6 種 mode (`NORMAL` / `LINE_COMMENT` / `BLOCK_COMMENT` / `STR_SINGLE` / `STR_DOUBLE` / `STR_BACKTICK`),逃逸字元 `\` 跳過下一字元;backtick 內 `{` `}` 一律惰性(template hole 視為不透明,符合 spec 簡化要求)
+4. **掃描範圍**:重用 Phase 12 的 `getWorkspaceMutations()` 撈出工作區異動,僅對 `.ts` / `.js` 副檔名執行;讀檔失敗(deleted in diff)靜默 skip
+5. **整合位置**:`runPreflightGates(mutations, taskMd, root)` 在 Phase 12 archPlan 之後、Phase 10/11 semantic oracle 之前;**single failure surfaces**(archPlan 失敗時 codeSlop 不再執行)
+6. **零誤殺夥伴對 archPlan**:archPlan 限定 `src/`+`tests/` prefix;codeSlop 限定 `.ts`/`.js` extension。兩者交集 = 大多數實作檔,但根目錄 `.ts` 只觸發 codeSlop、`src/*.md` 兩個都不觸發
+7. **物理阻斷錯誤碼**:`[CODE_SLOP_DETECTED]` 與 `[ILLEGAL_MUTATION]` / `[CRITICAL_FORGERY]` 三足鼎立,各佔獨立高對比橫幅
+
+### gateHook.ts 重構摘要
+
+原本 `runGate` 函式 body 約 94 行,自身已違反 Phase 13 新引入的 MAX_BLOCK_LINES=60 鐵律。重構策略:抽出 6 個 helper 函式 (`checkGovernanceFiles` / `runPreflightGates` / `runSemanticOracleStep` / `stampCompliance` / `emptyErrResult` / `withErrResult`),`runGate` 主體縮到 ~25 行純編排;`main` 函式提取 4 個 banner renderer (`renderIllegalMutationBanner` / `renderForgeryBanner` / `renderCodeSlopBanner` / `renderErrorBanner`) 加 `bannerLine()` helper,main body 縮到 ~7 行。整檔 max depth = 4(於 `scanFileContent` for-loop 內最深),完全符合 Phase 13 自身。
+
+### 自舉 dogfood 證明（Builder 自測,Phase 13 唯一回歸閘）
+
+<Execution_Evidence>
+$ npx tsx -e "..." # 對 git diff 範圍跑 analyzeCodeSlop
+scanned: 4 / mutations: 5
+violations: 0
+CLEAN — Phase 13 dogfood pass
+</Execution_Evidence>
+
+5 個 mutations(`TASK.md` 是 .md 不掃),4 個 `.ts` 全部通過 depth ≤ 4 + block ≤ 60 兩條鐵律。**建立鐵閘的 commit 本身先通過鐵閘** — Phase 12 起的遞迴自舉鏈條延續。
+
+### 測試矩陣擴充
+
+| 檔案 | 新增 | 內容 |
+| --- | --- | --- |
+| `tests/linter/codeSlopLinter.test.ts` | NEW(20 案) | isScannable 3 + depth invariant 2 + block lines invariant 3 + 字串/註解 escape 6 + CRLF 1 + analyzeCodeSlop 4 + formatSlopError 1 |
+| `tests/cli/gateHook.test.ts` | refactor(13 → 17 案) | 原 3 個過長 describe 拆為 8 個小 describe(每個 ≤60 effective lines);新增 4 個 Phase 13 codeSlop 整合案(PASS clean + SCOPE README skipped + BLOCK depth + ORDER archPlan 先決) |
+
+總測試:142 → 166(+24),超過 spec 下限 152 加 14 案。
+
+### 預期下一步
+
+Tester Session 接手執行 5 道閘口,確認 T13.1 / T13.2 / T13.3 三條任務 `[/]` → `[x]`。

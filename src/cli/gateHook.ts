@@ -6,22 +6,17 @@ import { compileMarkdownToHandoff } from '../compiler/specCompiler.js';
 import { validateHandoffData } from '../validator/schemaValidator.js';
 import { validateLogStructure } from '../validator/semanticValidator.js';
 import { assertArchPlanConsistency } from '../validator/archPlanValidator.js';
+import { analyzeCodeSlop, formatSlopError } from '../linter/codeSlopLinter.js';
 import type { AgentRole } from '../types/types.js';
 
 export interface GateHookOptions {
   /** Project root containing TASK.md / WORKLOG.md / shared/. Defaults to process.cwd(). */
   workspaceRoot?: string;
-  /**
-   * Override the role to validate against. If omitted, the gate hook reads
-   * `current_role` from the compiled payload; if still missing, it falls back
-   * to 'Builder' (the most common Phase-1/2/3 sender).
-   */
+  /** Override the role to validate against; falls through to current_role else 'Builder'. */
   role?: AgentRole;
   /**
-   * Phase 12 test seam: inject the working-tree change set directly instead
-   * of shelling out to git. Production code never sets this — `runGate` calls
-   * `getWorkspaceMutations(workspaceRoot)` by default. Tests use it to
-   * simulate Pre-flight scenarios without needing a real git repo in tmpdir.
+   * Phase 12+13 test seam: inject the working-tree change set directly
+   * instead of shelling out to git. Production callers leave this undefined.
    */
   mutationsOverride?: string[];
 }
@@ -33,232 +28,260 @@ export interface GateHookResult {
   role: AgentRole;
 }
 
+type CompiledPayload = ReturnType<typeof compileMarkdownToHandoff>;
+
 const DEFAULT_ROLE: AgentRole = 'Builder';
 
-/**
- * Zero-shell working-tree change-set collector. Runs `git diff --name-only
- * HEAD` for tracked mutations + `git status --porcelain` filtered to `??`
- * entries for untracked files. Both calls use `spawnSync` with an argument
- * array (NOT `shell: true` and NOT `execSync('git ...')`), eliminating the
- * Windows DEP0190 informational warning and platform-specific quoting hazards
- * that motivated the Phase 8 refactor.
- *
- * Graceful degradation: if the cwd is not inside a git working tree (e.g.
- * inside a vitest `mkdtempSync` fixture), git exits non-zero and we return
- * an empty array — which causes the downstream Pre-flight gate to be a
- * passthrough. This keeps the entire Phase-1-through-11 test suite running
- * unmodified.
- */
-export function getWorkspaceMutations(cwd: string = process.cwd()): string[] {
-  const safeGit = (args: string[]): string => {
-    try {
-      const r = spawnSync('git', args, {
-        cwd,
-        encoding: 'utf8',
-        shell: false,
-      });
-      if (r.error || r.status !== 0) return '';
-      return r.stdout ?? '';
-    } catch {
-      return '';
-    }
-  };
+/* -------------------------------------------------------------------------- */
+/* Zero-shell git workspace mutation collector                                */
+/* -------------------------------------------------------------------------- */
 
-  const trackedRaw = safeGit(['diff', '--name-only', 'HEAD']);
-  const trackedPaths = trackedRaw
-    .split('\n')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+function safeGitCapture(args: string[], cwd: string): string {
+  try {
+    const r = spawnSync('git', args, { cwd, encoding: 'utf8', shell: false });
+    if (r.error || r.status !== 0) return '';
+    return r.stdout ?? '';
+  } catch {
+    return '';
+  }
+}
 
-  // `git status --porcelain` emits one line per file with a 2-char status
-  // prefix + 1 space + path. We extract only the `??` (untracked) rows; the
-  // tracked rows are already covered by `git diff --name-only HEAD` above.
-  const statusRaw = safeGit(['status', '--porcelain']);
-  const untrackedPaths = statusRaw
+function parseUntrackedLines(porcelainOutput: string): string[] {
+  return porcelainOutput
     .split('\n')
     .filter((line) => line.startsWith('?? '))
     .map((line) => line.slice(3).trim())
     .filter((s) => s.length > 0);
+}
 
-  // Order-preserving dedup so the produced list is deterministic across runs.
-  const seen = new Set<string>();
-  const merged: string[] = [];
-  for (const p of [...trackedPaths, ...untrackedPaths]) {
-    if (seen.has(p)) continue;
-    seen.add(p);
-    merged.push(p);
-  }
-  return merged;
+function parseTrackedLines(diffOutput: string): string[] {
+  return diffOutput
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 /**
- * Pure, testable core of the CLI gate. Does NOT call process.exit — callers
- * (main() below) are responsible for translating exitCode into a real exit.
- *
- * Phase 12 inserts a Pre-flight Architecture Plan Gate as the very first
- * substantive check (immediately after TASK.md is read, before anything
- * else). If any source/test mutation is present in the working tree but
- * TASK.md has no `- [x] ARCH_PLAN` bullet, the gate aborts with an
- * `[ILLEGAL_MUTATION]` error before the semantic forgery oracle or schema
- * validator can even run. No compliance stamp is written on Pre-flight
- * failure, so the agent can append the missing plan and re-run.
+ * `git diff --name-only HEAD` + `git status --porcelain`, both via spawnSync
+ * with arg arrays (no shell). Returns the deduplicated, order-preserving
+ * union. Falls back to `[]` when cwd is not a git working tree so the
+ * Phase-1-through-11 test suite (which uses `mkdtempSync` fixtures) still
+ * runs unmodified.
+ */
+export function getWorkspaceMutations(cwd: string = process.cwd()): string[] {
+  const tracked = parseTrackedLines(safeGitCapture(['diff', '--name-only', 'HEAD'], cwd));
+  const untracked = parseUntrackedLines(safeGitCapture(['status', '--porcelain'], cwd));
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const p of [...tracked, ...untracked]) {
+    if (seen.has(p)) continue;
+    seen.add(p);
+    out.push(p);
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pre-flight gates (Phase 12 archPlan + Phase 13 codeSlop)                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Phase 12 + Phase 13 fused Pre-flight stage. Runs intent gate first
+ * (archPlan), then geometric gate (codeSlop). First failure wins; we do NOT
+ * try to surface both since the agent should fix one structural issue at a
+ * time. Returns `null` on pass, the error message on block.
+ */
+function runPreflightGates(
+  mutations: string[],
+  taskMd: string,
+  root: string,
+): string | null {
+  try {
+    assertArchPlanConsistency(mutations, taskMd);
+  } catch (e) {
+    return (e as Error).message;
+  }
+  const slopReport = analyzeCodeSlop(mutations, root);
+  if (slopReport.violations.length > 0) {
+    return formatSlopError(slopReport);
+  }
+  return null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Post-facto gates                                                           */
+/* -------------------------------------------------------------------------- */
+
+function runSemanticOracleStep(payload: CompiledPayload): string | null {
+  const evidence = payload.execution_evidence_log ?? '';
+  if (evidence.length === 0) return null;
+  try {
+    validateLogStructure(evidence);
+  } catch (e) {
+    return (e as Error).message;
+  }
+  return null;
+}
+
+function stampCompliance(
+  root: string,
+  payload: CompiledPayload,
+  role: AgentRole,
+): string | null {
+  const path = resolve(root, 'shared/tester_input.json');
+  if (!existsSync(path)) return null;
+  try {
+    const current = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    current.latest_compiled_payload = {
+      compiled_at: new Date().toISOString(),
+      gate_role: role,
+      source_section: payload.source_section,
+      next_role: payload.next_role,
+      prompts_directory_path: payload.prompts_directory_path,
+      evidence_log_chars: payload.execution_evidence_log?.length ?? 0,
+    };
+    writeFileSync(path, JSON.stringify(current, null, 2) + '\n', 'utf8');
+    return null;
+  } catch (e) {
+    return `[gateHook] could not stamp tester_input.json: ${(e as Error).message}`;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Governance pre-check + result helpers                                      */
+/* -------------------------------------------------------------------------- */
+
+function checkGovernanceFiles(root: string): string | null {
+  const taskPath = resolve(root, 'TASK.md');
+  const worklogPath = resolve(root, 'WORKLOG.md');
+  if (!existsSync(taskPath) || !existsSync(worklogPath)) {
+    return (
+      `[gateHook] missing governance files: ` +
+      `TASK.md=${existsSync(taskPath)} WORKLOG.md=${existsSync(worklogPath)}`
+    );
+  }
+  return null;
+}
+
+function emptyErrResult(message: string, role: AgentRole): GateHookResult {
+  return { exitCode: 1, errors: [message], payload: {}, role };
+}
+
+function withErrResult(
+  message: string,
+  payload: CompiledPayload,
+  role: AgentRole,
+): GateHookResult {
+  return { exitCode: 1, errors: [message], payload, role };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Main entry — thin orchestrator                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Pure, testable core. Does NOT call process.exit — callers translate
+ * exitCode into a real exit. Pipeline:
+ *   1. Governance file presence
+ *   2. Pre-flight gates (Phase 12 archPlan + Phase 13 codeSlop)
+ *   3. Markdown → handoff compilation
+ *   4. Semantic forgery oracle (Phase 10/11)
+ *   5. JSON schema validation (Phase 2/3/6)
+ *   6. Compliance stamp to shared/tester_input.json
  */
 export function runGate(options: GateHookOptions = {}): GateHookResult {
   const root = resolve(options.workspaceRoot ?? process.cwd());
-  const taskPath = resolve(root, 'TASK.md');
-  const worklogPath = resolve(root, 'WORKLOG.md');
+  const defaultRole = options.role ?? DEFAULT_ROLE;
 
-  if (!existsSync(taskPath) || !existsSync(worklogPath)) {
-    return {
-      exitCode: 1,
-      errors: [
-        `[gateHook] missing governance files: TASK.md=${existsSync(taskPath)} WORKLOG.md=${existsSync(worklogPath)}`,
-      ],
-      payload: {},
-      role: options.role ?? DEFAULT_ROLE,
-    };
-  }
+  const govErr = checkGovernanceFiles(root);
+  if (govErr) return emptyErrResult(govErr, defaultRole);
 
-  const taskMd = readFileSync(taskPath, 'utf8');
+  const taskMd = readFileSync(resolve(root, 'TASK.md'), 'utf8');
+  const mutations = options.mutationsOverride ?? getWorkspaceMutations(root);
 
-  // Phase 12 — Pre-flight Architecture Plan Gate.
-  //
-  // Runs FIRST, before any handoff compilation or oracle work, so that an
-  // agent who modified source without declaring intent gets blocked as
-  // early as possible. On `[ILLEGAL_MUTATION]` we bail with a populated
-  // errors array and an empty payload — no stamping, no further validation.
-  try {
-    const mutations = options.mutationsOverride ?? getWorkspaceMutations(root);
-    assertArchPlanConsistency(mutations, taskMd);
-  } catch (e) {
-    return {
-      exitCode: 1,
-      errors: [(e as Error).message],
-      payload: {},
-      role: options.role ?? DEFAULT_ROLE,
-    };
-  }
+  const preflightErr = runPreflightGates(mutations, taskMd, root);
+  if (preflightErr) return emptyErrResult(preflightErr, defaultRole);
 
-  const worklogMd = readFileSync(worklogPath, 'utf8');
+  const worklogMd = readFileSync(resolve(root, 'WORKLOG.md'), 'utf8');
   const payload = compileMarkdownToHandoff(taskMd, worklogMd);
-
   const role = options.role ?? payload.current_role ?? DEFAULT_ROLE;
 
-  // Phase 10 — Semantic & Adversarial Sub-gate.
-  //
-  // Run the deterministic oracle BEFORE schemaValidator. Reason: schema R3 only
-  // proves the evidence log clears a minimum length (≥32 chars), which a forger
-  // trivially satisfies with `Tests 75 passed (75)`. The structural sub-gate
-  // proves the per-case `✓` track sums to the declared aggregate — pure-summary
-  // forgery cannot pass. On forgery, abort BEFORE any stamping happens.
-  const evidenceForOracle = payload.execution_evidence_log ?? '';
-  if (evidenceForOracle.length > 0) {
-    try {
-      validateLogStructure(evidenceForOracle);
-    } catch (e) {
-      return {
-        exitCode: 1,
-        errors: [(e as Error).message],
-        payload,
-        role,
-      };
-    }
-  }
+  const oracleErr = runSemanticOracleStep(payload);
+  if (oracleErr) return withErrResult(oracleErr, payload, role);
 
-  const result = validateHandoffData(payload as unknown, role, { workspaceRoot: root });
+  const schemaResult = validateHandoffData(payload as unknown, role, { workspaceRoot: root });
+  if (!schemaResult.success) return { exitCode: 1, errors: schemaResult.errors, payload, role };
 
-  if (!result.success) {
-    return { exitCode: 1, errors: result.errors, payload, role };
-  }
-
-  // Success path — stamp the latest compiled state into shared/tester_input.json
-  // (non-destructive: only touch `latest_compiled_payload` so the existing
-  //  Phase-handoff contents stay intact).
-  const handoffJsonPath = resolve(root, 'shared/tester_input.json');
-  if (existsSync(handoffJsonPath)) {
-    try {
-      const current = JSON.parse(readFileSync(handoffJsonPath, 'utf8')) as Record<string, unknown>;
-      current.latest_compiled_payload = {
-        compiled_at: new Date().toISOString(),
-        gate_role: role,
-        source_section: payload.source_section,
-        next_role: payload.next_role,
-        prompts_directory_path: payload.prompts_directory_path,
-        evidence_log_chars: payload.execution_evidence_log?.length ?? 0,
-      };
-      writeFileSync(handoffJsonPath, JSON.stringify(current, null, 2) + '\n', 'utf8');
-    } catch (e) {
-      return {
-        exitCode: 1,
-        errors: [`[gateHook] could not stamp tester_input.json: ${(e as Error).message}`],
-        payload,
-        role,
-      };
-    }
-  }
+  const stampErr = stampCompliance(root, payload, role);
+  if (stampErr) return withErrResult(stampErr, payload, role);
 
   return { exitCode: 0, errors: [], payload, role };
+}
+
+/* -------------------------------------------------------------------------- */
+/* CLI banner renderers (extracted so main() body stays under the slop limit) */
+/* -------------------------------------------------------------------------- */
+
+/* eslint-disable no-console */
+
+function bannerLine(): void {
+  console.error('================================================================');
+}
+
+function renderIllegalMutationBanner(err: string): void {
+  console.error('');
+  bannerLine();
+  console.error('=== ILLEGAL MUTATION DETECTED - HARD BLOCK ===');
+  bannerLine();
+  console.error(err);
+  bannerLine();
+  console.error('  No compliance stamp written to shared/tester_input.json.');
+  console.error('  Append `- [x] ARCH_PLAN <slug>: <intent>` to TASK.md and re-run.');
+  bannerLine();
+}
+
+function renderForgeryBanner(err: string): void {
+  console.error('');
+  bannerLine();
+  console.error('  [gateHook][FAIL] SEMANTIC FORGERY DETECTED — HARD BLOCK');
+  bannerLine();
+  console.error(err);
+  bannerLine();
+  console.error('  No compliance stamp written to shared/tester_input.json.');
+  console.error('  Re-run your test suite and paste the FULL verbose log.');
+  bannerLine();
+}
+
+function renderCodeSlopBanner(err: string): void {
+  console.error('');
+  bannerLine();
+  console.error('=== CODE SLOP DETECTED - HARD BLOCK ===');
+  bannerLine();
+  console.error(err);
+  bannerLine();
+  console.error('  No compliance stamp written to shared/tester_input.json.');
+  console.error('  Reduce nesting depth ≤ 4 and block effective-lines ≤ 60, then re-run.');
+  bannerLine();
+}
+
+function renderErrorBanner(err: string): void {
+  if (err.startsWith('[ILLEGAL_MUTATION]')) return renderIllegalMutationBanner(err);
+  if (err.startsWith('[CRITICAL_FORGERY]')) return renderForgeryBanner(err);
+  if (err.startsWith('[CODE_SLOP_DETECTED]')) return renderCodeSlopBanner(err);
+  console.error(`[gateHook][FAIL] ${err}`);
 }
 
 function main(): void {
   const res = runGate();
   if (res.exitCode === 0) {
-    // eslint-disable-next-line no-console
     console.log(`[gateHook] PASS role=${res.role} next=${res.payload.next_role ?? '(none)'}`);
   } else {
-    for (const err of res.errors) {
-      if (err.startsWith('[ILLEGAL_MUTATION]')) {
-        // Phase 12 — Pre-flight Architecture Plan Gate violation. The agent
-        // mutated source without first declaring intent. No compliance stamp
-        // was written; appending `- [x] ARCH_PLAN <slug>: <intent>` to
-        // TASK.md and re-running this gate is the documented unblock path.
-        // eslint-disable-next-line no-console
-        console.error('');
-        // eslint-disable-next-line no-console
-        console.error('================================================================');
-        // eslint-disable-next-line no-console
-        console.error('=== ILLEGAL MUTATION DETECTED - HARD BLOCK ===');
-        // eslint-disable-next-line no-console
-        console.error('================================================================');
-        // eslint-disable-next-line no-console
-        console.error(err);
-        // eslint-disable-next-line no-console
-        console.error('================================================================');
-        // eslint-disable-next-line no-console
-        console.error('  No compliance stamp written to shared/tester_input.json.');
-        // eslint-disable-next-line no-console
-        console.error('  Append `- [x] ARCH_PLAN <slug>: <intent>` to TASK.md and re-run.');
-        // eslint-disable-next-line no-console
-        console.error('================================================================');
-      } else if (err.startsWith('[CRITICAL_FORGERY]')) {
-        // High-contrast banner for semantic forgery — the Phase 10 deterministic
-        // oracle rejected the evidence body. No compliance stamp was written.
-        // eslint-disable-next-line no-console
-        console.error('');
-        // eslint-disable-next-line no-console
-        console.error('================================================================');
-        // eslint-disable-next-line no-console
-        console.error('  [gateHook][FAIL] SEMANTIC FORGERY DETECTED — HARD BLOCK');
-        // eslint-disable-next-line no-console
-        console.error('================================================================');
-        // eslint-disable-next-line no-console
-        console.error(err);
-        // eslint-disable-next-line no-console
-        console.error('================================================================');
-        // eslint-disable-next-line no-console
-        console.error('  No compliance stamp written to shared/tester_input.json.');
-        // eslint-disable-next-line no-console
-        console.error('  Re-run your test suite and paste the FULL verbose log.');
-        // eslint-disable-next-line no-console
-        console.error('================================================================');
-      } else {
-        // eslint-disable-next-line no-console
-        console.error(`[gateHook][FAIL] ${err}`);
-      }
-    }
+    for (const err of res.errors) renderErrorBanner(err);
   }
   process.exit(res.exitCode);
 }
+
+/* eslint-enable no-console */
 
 const invokedDirect = (() => {
   try {

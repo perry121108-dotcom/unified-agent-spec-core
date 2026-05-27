@@ -109,3 +109,13 @@
 - [x] T12.1 於 `src/cli/gateHook.ts` 實作雙階段 (Pre-flight / Post-facto) 門禁辨識機制 [Closed by Tester @ 2026-05-27]
 - [x] T12.2 新增 `ARCH_PLAN` 剛性不變式，若偵測到源碼變更且計畫未勾選，直接拋出 [ILLEGAL_MUTATION] 物理阻斷 [Closed by Tester @ 2026-05-27]
 - [x] T12.3 於 `tests/` 追加 10 案以上前置設計阻斷黑箱負例測試，執行 5-Gate 本地回歸 [Closed by Tester @ 2026-05-27]
+
+## Phase 13: 決定性代碼密度神諭 (Deterministic Code Slop Linter)
+
+> Phase 13 啟動：2026-05-27T20:00:00Z（Builder / Principal Architect 角色）
+> 任務範圍：把治理閘口從「設計意圖宣告 (Phase 12)」再下沉一階,進化為「代碼幾何品質硬控管」。對所有 working tree 內變更的 `.ts` / `.js` 實體源碼,用字串/註解逃逸感知的字元級狀態機,逐檔審查 `{}` 嵌套深度 ≤ 4 與單一區塊有效行數 ≤ 60 兩條剛性幾何不變式。並列於 Pre-flight 階段,任一違反 ⇒ 拋 `[CODE_SLOP_DETECTED]` 物理阻斷,不寫合規戳記。
+
+- [x] ARCH_PLAN phase-13: implement deterministic code slop linter — char-level state machine with string/comment escape, depth ≤ 4 + block effective-lines ≤ 60 invariants, hooked into Pre-flight after archPlan; dogfood by keeping all Phase 13 modifications themselves under the geometric limits
+- [ ] T13.1 於 `src/linter/codeSlopLinter.ts` 實作字串與註釋逃逸感知的大括號深度狀態機 [/]
+- [ ] T13.2 將 `analyzeCodeSlop` 閘口掛載至 `gateHook.ts` 的 Pre-flight 流水線中，攔截 `[CODE_SLOP_DETECTED]` [/]
+- [ ] T13.3 於 `tests/` 追加 10 案以上程式碼密度正負例單元測試，執行 5-Gate 本地回歸 [/]

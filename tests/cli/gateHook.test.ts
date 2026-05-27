@@ -111,7 +111,7 @@ beforeEach(() => {
   workspaces = [];
 });
 
-describe('runGate — programmatic core (no process.exit)', () => {
+describe('runGate — programmatic core PASS path', () => {
   it('PASS: valid Builder→Tester payload → exitCode 0', () => {
     const ws = setupWorkspace({
       currentRole: 'Builder',
@@ -130,6 +130,9 @@ describe('runGate — programmatic core (no process.exit)', () => {
     expect(stamped.latest_compiled_payload?.next_role).toBe('Tester');
   });
 
+});
+
+describe('runGate — programmatic core FAIL paths (evidence)', () => {
   it('FAIL: short evidence log (<32 chars) is rejected — R3 or Phase 10 forgery oracle, exitCode 1', () => {
     const ws = setupWorkspace({
       currentRole: 'Builder',
@@ -161,6 +164,9 @@ describe('runGate — programmatic core (no process.exit)', () => {
     expect(res.errors.some((e) => /execution_evidence_log/.test(e))).toBe(true);
   });
 
+});
+
+describe('runGate — programmatic core FAIL paths (schema)', () => {
   it('FAIL: unauthorized next_role (Builder→PM) triggers R1 cross-session error', () => {
     const ws = setupWorkspace({
       currentRole: 'Builder',
@@ -191,6 +197,9 @@ describe('runGate — programmatic core (no process.exit)', () => {
     ).toBe(true);
   });
 
+});
+
+describe('runGate — programmatic core boundary conditions', () => {
   it('FAIL: TASK.md / WORKLOG.md missing in workspace', () => {
     const ws = mkdtempSync(join(tmpdir(), 'uasc-empty-gate-'));
     workspaces.push(ws);
@@ -214,9 +223,10 @@ describe('runGate — programmatic core (no process.exit)', () => {
   });
 });
 
-describe('runGate — Phase 12 pre-flight architecture plan gate', () => {
-  const TASK_WITH_PLAN = '# TASK\n- [x] ARCH_PLAN phase-12: build the gate\n- [/] T12.1\n';
+const TASK_WITH_PLAN_PHASE12 =
+  '# TASK\n- [x] ARCH_PLAN phase-12: build the gate\n- [/] T12.1\n';
 
+describe('runGate — Phase 12 archPlan PASS paths', () => {
   it('PRE-FLIGHT PASS: src/ mutation declared via injected mutationsOverride + checked ARCH_PLAN in TASK.md → falls through to existing semantic gate', () => {
     const ws = setupWorkspace({
       currentRole: 'Builder',
@@ -227,7 +237,7 @@ describe('runGate — Phase 12 pre-flight architecture plan gate', () => {
     workspaces.push(ws);
     // Re-write TASK.md to include the checked ARCH_PLAN bullet so the
     // pre-flight gate releases.
-    writeFileSync(join(ws, 'TASK.md'), TASK_WITH_PLAN, 'utf8');
+    writeFileSync(join(ws, 'TASK.md'), TASK_WITH_PLAN_PHASE12, 'utf8');
 
     const res = runGate({
       workspaceRoot: ws,
@@ -235,32 +245,6 @@ describe('runGate — Phase 12 pre-flight architecture plan gate', () => {
     });
     expect(res.exitCode).toBe(0);
     expect(res.errors).toEqual([]);
-  });
-
-  it('PRE-FLIGHT BLOCK: src/ mutation injected but no ARCH_PLAN in TASK.md → exitCode 1, [ILLEGAL_MUTATION] error, no stamp written', () => {
-    const ws = setupWorkspace({
-      currentRole: 'Builder',
-      nextRole: 'Tester',
-      evidence: VALID_LOG,
-      includePrompts: true,
-    });
-    workspaces.push(ws);
-    // Default setupWorkspace TASK.md is `# TASK\n- [/] something\n` — no plan.
-
-    const res = runGate({
-      workspaceRoot: ws,
-      mutationsOverride: ['src/cli/gateHook.ts', 'src/validator/archPlanValidator.ts'],
-    });
-    expect(res.exitCode).toBe(1);
-    expect(res.errors[0]).toMatch(/\[ILLEGAL_MUTATION\]/);
-    expect(res.errors[0]).toContain('src/cli/gateHook.ts');
-    expect(res.errors[0]).toContain('ARCH_PLAN');
-    // Critical: NO stamp written despite VALID_LOG being present — the
-    // pre-flight aborted before the oracle even ran.
-    const stamped = JSON.parse(
-      readFileSync(join(ws, 'shared/tester_input.json'), 'utf8'),
-    );
-    expect(stamped.latest_compiled_payload).toBeUndefined();
   });
 
   it('PRE-FLIGHT PASSTHROUGH: pure-docs mutation (TASK.md + WORKLOG.md) → does NOT trip ARCH_PLAN even without plan; standard handoff flow proceeds', () => {
@@ -295,6 +279,132 @@ describe('runGate — Phase 12 pre-flight architecture plan gate', () => {
     const res = runGate({ workspaceRoot: ws });
     expect(res.exitCode).toBe(0);
     expect(res.errors).toEqual([]);
+  });
+});
+
+describe('runGate — Phase 12 archPlan BLOCK paths', () => {
+  it('PRE-FLIGHT BLOCK: src/ mutation injected but no ARCH_PLAN in TASK.md → exitCode 1, [ILLEGAL_MUTATION] error, no stamp written', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    // Default setupWorkspace TASK.md is `# TASK\n- [/] something\n` — no plan.
+
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['src/cli/gateHook.ts', 'src/validator/archPlanValidator.ts'],
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.errors[0]).toMatch(/\[ILLEGAL_MUTATION\]/);
+    expect(res.errors[0]).toContain('src/cli/gateHook.ts');
+    expect(res.errors[0]).toContain('ARCH_PLAN');
+    // Critical: NO stamp written despite VALID_LOG being present — the
+    // pre-flight aborted before the oracle even ran.
+    const stamped = JSON.parse(
+      readFileSync(join(ws, 'shared/tester_input.json'), 'utf8'),
+    );
+    expect(stamped.latest_compiled_payload).toBeUndefined();
+  });
+});
+
+const TASK_WITH_PLAN_PHASE13 =
+  '# TASK\n- [x] ARCH_PLAN phase-13: dogfood the new geometric gate\n- [/] T13.1\n';
+
+/** Builds an artificially nested slop fixture: `function a(){{{{{{}}}}}}`. */
+function deepSlopFixture(): string {
+  return 'function evil() {{{{{{}}}}}}\n'; // 6 opens = depth-6 violation
+}
+
+describe('runGate — Phase 13 codeSlop PASS paths', () => {
+  it('CODE_SLOP PASS: changed .ts file within geometric limits → standard handoff flow proceeds', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    writeFileSync(join(ws, 'TASK.md'), TASK_WITH_PLAN_PHASE13, 'utf8');
+    writeFileSync(join(ws, 'clean.ts'), 'function a() { return 1; }\n', 'utf8');
+
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['clean.ts'],
+    });
+    expect(res.exitCode).toBe(0);
+    expect(res.errors).toEqual([]);
+  });
+
+  it('CODE_SLOP SCOPE: only .ts/.js mutations are scanned — README.md path is ignored even when it has many braces', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    writeFileSync(join(ws, 'TASK.md'), TASK_WITH_PLAN_PHASE13, 'utf8');
+    writeFileSync(
+      join(ws, 'README.md'),
+      '# Notes\n```\n{{{{{{}}}}}}}}\n```\n',
+      'utf8',
+    );
+
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['README.md'],
+    });
+    expect(res.exitCode).toBe(0);
+    expect(res.errors).toEqual([]);
+  });
+});
+
+describe('runGate — Phase 13 codeSlop BLOCK paths', () => {
+  it('CODE_SLOP BLOCK: changed .ts file exceeds nesting depth → exitCode 1, [CODE_SLOP_DETECTED] error, no stamp', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    writeFileSync(join(ws, 'TASK.md'), TASK_WITH_PLAN_PHASE13, 'utf8');
+    writeFileSync(join(ws, 'slop.ts'), deepSlopFixture(), 'utf8');
+
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['slop.ts'],
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.errors[0]).toMatch(/\[CODE_SLOP_DETECTED\]/);
+    expect(res.errors[0]).toContain('slop.ts');
+    const stamped = JSON.parse(
+      readFileSync(join(ws, 'shared/tester_input.json'), 'utf8'),
+    );
+    expect(stamped.latest_compiled_payload).toBeUndefined();
+  });
+
+  it('CODE_SLOP ORDER: when both archPlan and codeSlop would fail, archPlan wins (intent before geometry)', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    mkdirSync(join(ws, 'src'), { recursive: true });
+    writeFileSync(join(ws, 'src/slop.ts'), deepSlopFixture(), 'utf8');
+
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['src/slop.ts'],
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.errors[0]).toMatch(/\[ILLEGAL_MUTATION\]/);
+    expect(res.errors[0]).not.toMatch(/\[CODE_SLOP_DETECTED\]/);
   });
 });
 
