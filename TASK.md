@@ -106,6 +106,6 @@
 > 任務範圍：把治理閘口從「事後驗證(post-facto evidence audit)」往前推一階,進化為「事前設計錨定(pre-flight architecture plan gate)」。當 Builder 代理人企圖在「未先勾選 ARCH_PLAN 設計意圖」的情況下直接 mutate 源碼,gateHook 必須在語意防偽 oracle 之前先做「雙階段判別」並以 `[ILLEGAL_MUTATION]` 物理阻斷,逼迫代理人先思考、後動工。
 
 - [x] ARCH_PLAN phase-12: implement pre-flight architecture plan gate (archPlanValidator + getWorkspaceMutations + dual-banner) so source mutations without a vetted plan are physically blocked before the Phase 10/11 semantic oracle ever fires; dogfood the gate on its own enabling commit
-- [ ] T12.1 於 `src/cli/gateHook.ts` 實作雙階段 (Pre-flight / Post-facto) 門禁辨識機制 [/]
-- [ ] T12.2 新增 `ARCH_PLAN` 剛性不變式，若偵測到源碼變更且計畫未勾選，直接拋出 [ILLEGAL_MUTATION] 物理阻斷 [/]
-- [ ] T12.3 於 `tests/` 追加 10 案以上前置設計阻斷黑箱負例測試，執行 5-Gate 本地回歸 [/]
+- [x] T12.1 於 `src/cli/gateHook.ts` 實作雙階段 (Pre-flight / Post-facto) 門禁辨識機制 [Closed by Tester @ 2026-05-27]
+- [x] T12.2 新增 `ARCH_PLAN` 剛性不變式，若偵測到源碼變更且計畫未勾選，直接拋出 [ILLEGAL_MUTATION] 物理阻斷 [Closed by Tester @ 2026-05-27]
+- [x] T12.3 於 `tests/` 追加 10 案以上前置設計阻斷黑箱負例測試，執行 5-Gate 本地回歸 [Closed by Tester @ 2026-05-27]

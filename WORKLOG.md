@@ -1847,3 +1847,14 @@ Phase 12 把閘口往前推一階,實作**「前置設計錨定」**:
 ### 預期下一步
 
 T12.1 起動,實作 `src/cli/gateHook.ts` 的雙階段重構與 `archPlanValidator` 模組。所有 mutation 都會在 `git diff` 受到自我審視之後才寫入 — Phase 12 將是首個「會審判自己 patch 的 Phase」。
+
+---
+
+## 2026-05-27 — Tester 正式驗收 (Phase 12)
+
+✅ Tester 正式驗收成功 @ 2026-05-27
+- 實測 5-Gate Staircase 全數 exit 0（tsc 0 / eslint 0 / 142 tests passed）。
+- 黑箱負例測試驗證成功：未勾選 ARCH_PLAN 時，精確拋出 [ILLEGAL_MUTATION] 物理阻斷橫幅，shared/tester_input.json 戳記未被污染。
+- 核心引擎通過遞迴自舉（Meta-recursive Dogfooding）驗證。
+
+> Phase 12 結案狀態：**Closed by Tester @ 2026-05-27**（五重機器驗證 exit=0 × 5；Test Files 12 passed / Tests 142 passed；`grep -c DEP0190 = 0`；scan baseline `scanned=22 findings=39 fail=33 warn=6` 與 Phase 11 逐字節一致；建立鐵閘的 commit `5a62277` 本身先通過該鐵閘 — Meta-recursive Dogfooding 自證）
