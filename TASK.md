@@ -125,5 +125,5 @@
 > 啟動：2026-05-27T22:30:00Z（Principal Architect / Release Engineer）
 > 任務範圍：Phase 11 `VITEST_FILE_REF` 正則硬鎖 `tests/` 前綴,無法接受 Next.js / Vite 慣用的 `src/**/*.test.ts(x)` inline-test 慣例。本 hot-fix 拓寬正則為通用 `/[A-Za-z0-9_\-./]+\.test\.[jt]sx?/g`,涵蓋任何目錄前綴與 `.test.ts/tsx/js/jsx` 後綴。
 
-- [x] ARCH_PLAN phase-14-hotfix: broaden vitest regex for inline tests
-- [/] T14.1 修 `src/validator/semanticValidator.ts` 之 `VITEST_FILE_REF`;新增 ≥1 案 regression test 覆蓋 inline-test 路徑(src/lib + .tsx 變體);累積測試 166 → ≥167;5-Gate 全綠;tag v0.8.1
+- [x] ARCH_PLAN phase-14-hotfix: broaden vitest regex for inline tests [Closed by Tester @ 2026-05-27]
+- [x] T14.1 修 `src/validator/semanticValidator.ts` 之 `VITEST_FILE_REF`;新增 ≥1 案 regression test 覆蓋 inline-test 路徑(src/lib + .tsx 變體);累積測試 166 → ≥167;5-Gate 全綠;tag v0.8.1 [Closed by Tester @ 2026-05-27]
