@@ -1514,4 +1514,214 @@ $ rm -rf D:/agent-core-p8t-smoke
 
 Phase 8「Windows 執行期與警告消除優化」**正式 Closed by Tester @ 2026-05-26T21:08:00Z**。前期 Phase 1/2/3/4/6 結案狀態完整保留，未遭篡改（6 條 `Closed by Tester` 戳記齊備）。`unified-agent-spec-core` 已升版 v0.5.1，工具鏈 Windows 環境執行純淨度達 100%——`vitest run` 與 `dist/bin` 真實 CLI invocation 雙路徑 DEP0190 計數歸零、`(node:NNNN)` deprecation 字樣完全消除、shell 依賴徹底切除、跨平台 argv 處理統一。
 
+---
+
+## 2026-05-26T21:50:00Z — Builder Session：Phase 10 本地語意防偽與對抗性子閘口
+
+- **角色**：Builder / Security Architect
+- next_role: Tester
+- prompts_directory_path: prompts
+- 所有 System Prompt 必須外置於 `prompts/` 目錄（沿用既有鐵律；本階段新增 `prompts/adversarial_auditor.txt` 御用反對者人格契約）。
+- **威脅模型**：AI Builder 代理人偽造看似合理但從未實際執行的 vitest 通過 log（典型攻擊：直接貼出 `Tests 75 passed (75)` 摘要而不列舉任一 per-case `✓` 行）。
+- **防禦策略**：在執行期門禁 `runGate` 之 schemaValidator R3（最小 32 字長度檢查）之前，強制插入剛性數學不變式 — 實際掃描到的 `✓ tests/...` per-case 行數必須完美等於 `Tests N passed (N)` 宣告之 N。任何 1 碼偏差或無 Vitest fingerprint ⇒ `[CRITICAL_FORGERY]` 拋出 + `process.exit(1)` + 不寫戳記。
+- T10.1 / T10.2 / T10.3 進入 `[/]` 進行中。
+
+### 啟動時間戳
+
+- builder_session_started_at: `2026-05-26T21:50:00Z`
+- supersedes_phase: `phase8_windows_runtime_refinement`
+- target_spec_version: `0.6.0`（minor — Phase 10 新增防偽決定性神諭與對抗性稽核資產，向下相容；既有 `agent-core check` 行為對通過真實測試的下游無影響）
+
+### 設計取捨記錄
+
+1. **「無 Vitest 結構直接拒絕」之含義界定**：spec 原文「完全沒有讀取到合法的 Vitest 結構，直接拋出強型別錯誤」採嚴格詮釋——既無 `Tests N passed (N)` 摘要、亦無任一 `✓` per-case 行的 evidence 視同偽造。此設計使既有 fixture（純摘要無 ✓）必須升版為 Phase-10-compliant 格式，已同步重構 `tests/cli/gateHook.test.ts` 之 `VALID_LOG` 與 `tests/integration/bootstrap.test.ts` 之 `VALID_WORKLOG_BODY`（各 3 個 ✓ 與 declared total = 3 完全等式）。
+2. **CRLF/LF 相容**：`semanticValidator` 第一步即 `replace(/\r\n/g, '\n')` 標準化；正則均以 `[\s\S]` 或 `\s` 處理空白，不依賴 `.` dotall。
+3. **錯誤路徑優先序**：semanticValidator 之 `[CRITICAL_FORGERY]` 必須早於 schemaValidator R3 觸發，避免「合規長度 + 偽造內容」之 race condition。
+
+### 新增資產清單
+
+- `prompts/adversarial_auditor.txt`（御用反對者人格契約 — A/B/C/D/E 5 大類硬性結構檢查 + JSON 輸出 contract）
+- `src/validator/semanticValidator.ts`（`unwrapEvidenceBody` / `analyzeLogStructure` / `validateLogStructure` 三個公開函式）
+- `tests/validator/semanticValidator.test.ts`（14 新測試案例）
+- 修改：`src/cli/gateHook.ts`（早期 semantic 守衛 + 高對比度 forgery banner）
+- 修改：`tests/cli/gateHook.test.ts`（VALID_LOG fixture 升版）
+- 修改：`tests/integration/bootstrap.test.ts`（VALID_WORKLOG_BODY fixture 升版）
+
+### Builder 自測（Phase 10 五重機器驗證 + 偽造負例硬阻斷實證）
+
+#### `<Execution_Evidence>`
+
+```
+$ cd /d/unified-agent-spec-core
+
+=== [1/5] tsc --noEmit ===
+$ npm run build
+> unified-agent-spec-core@0.5.1 build
+> tsc --noEmit
+EXIT_CODE=0  (zero diagnostics)
+
+=== [2/5] eslint ===
+$ npm run lint
+> unified-agent-spec-core@0.5.1 lint
+> eslint "src/**/*.ts" "tests/**/*.ts"
+EXIT_CODE=0  (zero errors, zero warnings)
+
+=== [3/5] vitest（含 Phase 10 新增 15 案）===
+$ npm test -- --reporter=verbose
+> unified-agent-spec-core@0.5.1 test
+> vitest run --reporter=verbose
+
+ RUN  v1.6.1 D:/unified-agent-spec-core
+
+ ✓ tests/linter/evidenceContract.test.ts > R3 Evidence Contract > FAIL: subjective Pass definition without machine evidence
+ ✓ tests/linter/evidenceContract.test.ts > R3 Evidence Contract > CLEAN: definition cites Execution_Evidence + exit code + shared/*.json
+ ✓ tests/linter/evidenceContract.test.ts > R3 Evidence Contract > BOUNDARY: "Pass" outside acceptance-definition context is ignored
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — unwrapEvidenceBody (Phase 10 text extraction) > returns input unchanged when no <Execution_Evidence> open marker is present
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — unwrapEvidenceBody (Phase 10 text extraction) > extracts the inner region between open and close markers
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — unwrapEvidenceBody (Phase 10 text extraction) > returns text-from-marker-to-EOF when an open marker has no closing pair
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — analyzeLogStructure (pure counting) > counts markers and parses the declared total on a clean log
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — analyzeLogStructure (pure counting) > returns declared_passed_total = -1 sentinel when no Tests-passed summary exists
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — analyzeLogStructure (pure counting) > handles CRLF line endings identically to LF
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — validateLogStructure (hard gate) > PASS: real vitest verbose block passes cleanly and returns the report
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — validateLogStructure (hard gate) > PASS: same block wrapped in <Execution_Evidence>...</...> tags also passes
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — validateLogStructure (hard gate) > PASS: CRLF line endings do not break the validator
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — validateLogStructure (hard gate) > FORGED: pure-summary fabrication (zero markers, declared 75) is rejected
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — validateLogStructure (hard gate) > FORGED: off-by-one drift between count (3) and declared total (4) is rejected
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — validateLogStructure (hard gate) > FORGED: massive inflation (2 vs declared 75) is rejected
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — validateLogStructure (hard gate) > FORGED: summary + present but no tests/*.test.ts file references is rejected
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — validateLogStructure (hard gate) > FORGED: completely non-vitest text (no summary, no marker) is rejected
+ ✓ tests/validator/semanticValidator.test.ts > semanticValidator — gateHook end-to-end forgery rejection (smoke) > forgery error message embeds both scanned count and declared total for diagnostics
+ ✓ tests/linter/promptInlineStragglers.test.ts > R2 Prompt Inline Stragglers > FAIL: role doc with no prompts/ directive (Pattern A)
+ ✓ tests/linter/promptInlineStragglers.test.ts > R2 Prompt Inline Stragglers > FAIL: System Prompt mention without externalization in same paragraph (Pattern B)
+ ✓ tests/linter/promptInlineStragglers.test.ts > R2 Prompt Inline Stragglers > WARN: code fence longer than 8 body lines (Pattern C)
+ ✓ tests/linter/promptInlineStragglers.test.ts > R2 Prompt Inline Stragglers > CLEAN: prompts/ + externalization keyword + short fence yields no findings
+ ✓ tests/compiler/specCompiler.test.ts > specCompiler — section extraction > picks the LATEST `## ` section, not the earliest
+ ✓ tests/compiler/specCompiler.test.ts > specCompiler — section extraction > returns null when no `## ` heading exists
+ ✓ tests/compiler/specCompiler.test.ts > specCompiler — field extractors > extracts next_role from inline field syntax
+ ✓ tests/compiler/specCompiler.test.ts > specCompiler — field extractors > rejects unknown roles in next_role field
+ ✓ tests/compiler/specCompiler.test.ts > specCompiler — field extractors > extracts current_role from **角色** convention
+ ✓ tests/compiler/specCompiler.test.ts > specCompiler — field extractors > extracts execution evidence from fenced block after marker
+ ✓ tests/compiler/specCompiler.test.ts > specCompiler — field extractors > returns undefined when Execution_Evidence marker is missing
+ ✓ tests/compiler/specCompiler.test.ts > specCompiler — field extractors > extracts prompts_directory_path explicitly or via prompts/ hint
+ ✓ tests/compiler/specCompiler.test.ts > specCompiler — end-to-end compile > compiles a fully-valid WORKLOG into a complete handoff payload
+ ✓ tests/compiler/specCompiler.test.ts > specCompiler — end-to-end compile > returns an empty object when WORKLOG has no `## ` sections
+ ✓ tests/linter/lifecycleMatrix.test.ts > R1 Lifecycle Matrix > FAIL: handoff mentioned without delivery contract (Pattern A)
+ ✓ tests/linter/lifecycleMatrix.test.ts > R1 Lifecycle Matrix > FAIL: bidirectional role flow without termination (Pattern B)
+ ✓ tests/linter/lifecycleMatrix.test.ts > R1 Lifecycle Matrix > CLEAN: explicit contract + termination condition yields no findings
+ ✓ tests/linter/lifecycleMatrix.test.ts > R1 Lifecycle Matrix > BOUNDARY: file with no handoff and no role transition is silent
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — happy paths > PASS: Builder handoff with prompts dir + evidence log + valid next_role
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — happy paths > PASS: Tester handoff with prompts dir + evidence log (no next_role)
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — happy paths > PASS: PM handoff cleanly accepts allowed next_role=Architect
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — evidence contract failures > FAIL: missing execution_evidence_log (R3 invariant)
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — evidence contract failures > FAIL: execution_evidence_log too short (under 32 chars)
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — evidence contract failures > FAIL: execution_evidence_log of wrong type
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — prompts externalization failures > FAIL: missing prompts_directory_path (R2 invariant)
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — prompts externalization failures > FAIL: prompts_directory_path points to a non-existent folder
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — lifecycle / handoff failures > FAIL: Builder PM is cross-session unauthorized handoff (R1 invariant)
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — lifecycle / handoff failures > FAIL: artifact_path file missing on disk
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — boundary cases > FAIL: payload is null
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — boundary cases > FAIL: payload is an array
+ ✓ tests/validator/schemaValidator.test.ts > validateHandoffData — boundary cases > FAIL: next_role of wrong type still rejected
+ ✓ tests/linter/index.scan.test.ts > Linter end-to-end on synthetic fixtures > catches every synthetic defect fixture (100% capture rate)
+ ✓ tests/linter/index.scan.test.ts > Linter end-to-end on synthetic fixtures > exposes all three rule modules
+ ✓ tests/integration/ciWorkflow.test.ts > Phase 6 — CI workflow scaffolding > runBootstrap creates .github/workflows directory inside the target
+ ✓ tests/integration/ciWorkflow.test.ts > Phase 6 — CI workflow scaffolding > runBootstrap emits agent-core-gate.yml at the canonical CI workflow path
+ ✓ tests/integration/ciWorkflow.test.ts > Phase 6 — CI workflow scaffolding > emitted workflow has the agent-core-gate name and triggers on push + pull_request
+ ✓ tests/integration/ciWorkflow.test.ts > Phase 6 — CI workflow scaffolding > emitted workflow invokes agent-core check as the hard gate step
+ ✓ tests/integration/ciWorkflow.test.ts > Phase 6 — CI workflow scaffolding > runBootstrap is idempotent for the CI workflow — second run does not overwrite a user edit
+ ✓ tests/integration/ciWorkflow.test.ts > Phase 6 — CI workflow scaffolding > loadCiWorkflowTemplate returns the canonical template content (non-empty, parseable as YAML-ish)
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — loadFeatureSpec validation > parses a well-formed FeatureSpec JSON file
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — loadFeatureSpec validation > throws when the file does not exist
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — loadFeatureSpec validation > throws when the JSON is malformed
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — loadFeatureSpec validation > throws when feature_id is missing
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — loadFeatureSpec validation > throws when neither suggested_specifications nor risk_pain_points is populated
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — compileFeatureSpecToAcceptanceCriteria > emits a marker-fenced block containing every suggested specification statement verbatim
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — compileFeatureSpecToAcceptanceCriteria > emits every risk/pain point with explicit severity surfaced when present
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — compileFeatureSpecToAcceptanceCriteria > uses provided AC ids when supplied, otherwise auto-numbers AC-FS-S<N> / AC-FS-R<N>
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — runBootstrap --spec integration (FeatureSpec TASK.md AC injection) > injects the AC block into a freshly-scaffolded TASK.md and reports the file as augmented
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — runBootstrap --spec integration (FeatureSpec TASK.md AC injection) > 100% of upstream AC statements end up in TASK.md (hard contract)
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — runBootstrap --spec integration (FeatureSpec TASK.md AC injection) > is idempotent — running --spec a second time does not duplicate the AC block
+ ✓ tests/compiler/specBridge.test.ts > Phase 6 — runBootstrap --spec integration (FeatureSpec TASK.md AC injection) > still passes the throw path when --spec points at a malformed file (no TASK.md mutation)
+ ✓ tests/cli/gateHook.test.ts > runGate — programmatic core (no process.exit) > PASS: valid Builder Tester payload exitCode 0
+ ✓ tests/cli/gateHook.test.ts > runGate — programmatic core (no process.exit) > FAIL: short evidence log (<32 chars) is rejected — R3 or Phase 10 forgery oracle, exitCode 1
+ ✓ tests/cli/gateHook.test.ts > runGate — programmatic core (no process.exit) > FAIL: missing Execution_Evidence block triggers R3 error and exitCode 1
+ ✓ tests/cli/gateHook.test.ts > runGate — programmatic core (no process.exit) > FAIL: unauthorized next_role (Builder PM) triggers R1 cross-session error
+ ✓ tests/cli/gateHook.test.ts > runGate — programmatic core (no process.exit) > FAIL: missing prompts/ directory triggers R2 error and exitCode 1
+ ✓ tests/cli/gateHook.test.ts > runGate — programmatic core (no process.exit) > FAIL: TASK.md / WORKLOG.md missing in workspace
+ ✓ tests/cli/gateHook.test.ts > runGate — programmatic core (no process.exit) > BOUNDARY: artifact file absent exitCode 1 even with valid evidence
+ ✓ tests/cli/gateHook.test.ts > gateHook — subprocess hard-block (process.exit verification) > exits with code 1 when run as a script against a defective workspace
+ ✓ tests/cli/gateHook.test.ts > gateHook — subprocess hard-block (process.exit verification) > exits with code 0 when run as a script against a fully-valid workspace
+ ✓ tests/integration/bootstrap.test.ts > runBootstrap — scaffolding artifacts > creates shared/ and prompts/ directories
+ ✓ tests/integration/bootstrap.test.ts > runBootstrap — scaffolding artifacts > writes a TASK.md skeleton with at least one [/] in_progress task
+ ✓ tests/integration/bootstrap.test.ts > runBootstrap — scaffolding artifacts > writes a WORKLOG.md skeleton with <Execution_Evidence> placeholder
+ ✓ tests/integration/bootstrap.test.ts > runBootstrap — scaffolding artifacts > writes agent-governance.json with the strong-typed invariant trio
+ ✓ tests/integration/bootstrap.test.ts > runBootstrap — scaffolding artifacts > seeds shared/tester_input.json with bootstrap metadata
+ ✓ tests/integration/bootstrap.test.ts > runBootstrap — scaffolding artifacts > is idempotent — re-running does not overwrite existing files
+ ✓ tests/integration/bootstrap.test.ts > runBootstrap + runGate — cross-repo E2E > FAIL: bootstrap + intentionally-short Execution_Evidence runGate exitCode 1
+ ✓ tests/integration/bootstrap.test.ts > runBootstrap + runGate — cross-repo E2E > PASS: bootstrap + compliant WORKLOG runGate exitCode 0 + stamps latest_compiled_payload
+ ✓ tests/integration/bootstrap.test.ts > agent-core CLI — bin subprocess invocation > subprocess: agent-core init exits 0 and reports scaffolded files
+ ✓ tests/integration/bootstrap.test.ts > agent-core CLI — bin subprocess invocation > subprocess: agent-core check against defective bootstrap exits 1
+ ✓ tests/integration/bootstrap.test.ts > agent-core CLI — bin subprocess invocation > subprocess: agent-core check against compliant bootstrap exits 0
+ ✓ tests/integration/bootstrap.test.ts > agent-core CLI — bin subprocess invocation > subprocess: unknown subcommand exits 2 with usage to stderr
+
+ Test Files  11 passed (11)
+      Tests  90 passed (90)
+   Duration  1.31s
+EXIT_CODE=0
+→ Phase 10 新增 15 案（semanticValidator: unwrap×3 + analyze×3 + validate×8 + diagnostic×1）；累積 90 ≥ 75 ✓
+→ DEP0190 計數仍歸零（Phase 8 收益保留）
+
+=== [4/5] scan（Phase 1 Linter regression baseline）===
+$ npm run scan
+[linter] scanned=22 findings=39 fail=33 warn=6
+EXIT_CODE=0
+→ Phase 1 Linter 引擎行為與基線完全一致（22/39/33/6）
+
+=== [5/5] build:dist ===
+$ rm -rf dist && npm run build:dist
+> tsc -p tsconfig.build.json && node scripts/copy-assets.mjs
+[copy-assets] copied 1 asset(s) D:\unified-agent-spec-core\src\templates -> D:\unified-agent-spec-core\dist\templates
+EXIT_CODE=0
+→ dist/bin/agent-core.js + dist/templates/ci-workflow.tpl.yml 完整產出
+
+=== [負例 E2E] 偽造 WORKLOG 透過 dist/bin/agent-core.js check 之硬阻斷實證 ===
+$ mkdir D:/agent-core-p10-forgery && cd D:/agent-core-p10-forgery
+$ cat > WORKLOG.md  (含 <Execution_Evidence> 包含 "Tests 75 passed (75)" 但 0 個 ✓ per-case markers — 經典 AI 拼湊攻擊樣本)
+$ node /d/unified-agent-spec-core/dist/bin/agent-core.js check
+
+================================================================
+  [agent-core][FAIL] SEMANTIC FORGERY DETECTED — HARD BLOCK
+================================================================
+[CRITICAL_FORGERY] Evidence log matrix mismatch or structure artificial. Summary line declares 75 passed tests but only 0 canonical 'tests/...' per-case markers were scanned in the evidence body. Per-case track MUST sum to the declared aggregate.
+================================================================
+  No compliance stamp written to shared/tester_input.json.
+  Re-run your test suite and paste the FULL verbose log.
+================================================================
+FORGERY_EXIT=1
+$ cat shared/tester_input.json
+{}                  ← 戳記檔保持原狀 {} ，無任何寫入 ✓
+$ rm -rf D:/agent-core-p10-forgery
+→ Phase 10 防偽閘口在 dist/bin 真實 CLI 路徑下成功硬性阻斷偽造 WORKLOG，未寫入合規戳記。
+```
+
+### Builder 自測結論
+
+- **五重機器驗證 exit 0 × 5**：tsc / eslint / vitest（11 files / 90 tests）/ scan（22/39/33/6 baseline 不變）/ build:dist 全綠。
+- **Phase 10 新增 15 案測試**：semanticValidator.test.ts 涵蓋 `unwrapEvidenceBody` × 3 + `analyzeLogStructure` × 3 + `validateLogStructure` 硬閘口 × 8（PASS 路徑 3 + FORGED 路徑 5）+ 錯誤訊息診斷 × 1。累積總測試 90 ≥ 75。
+- **DEP0190 計數仍歸零**：Phase 8 收益保留，Windows 環境 vitest run 完全純淨。
+- **偽造負例硬阻斷實證**：以 `dist/bin/agent-core.js check`（canonical user path）對手工偽造之 WORKLOG（含「Tests 75 passed (75)」摘要 + 0 個 ✓ markers）執行，輸出高對比度 SEMANTIC FORGERY DETECTED 橫幅，`process.exit(1)` 硬性阻斷，`shared/tester_input.json` 未被寫入任何戳記（保持 `{}` 原狀）。
+- **Fixture 升版必要性**：因「無 Vitest 結構直接拒絕」之嚴格詮釋，既有 fixture（純摘要無 ✓）必須升版為 Phase-10-compliant 格式。已同步重構 `tests/cli/gateHook.test.ts` 之 `VALID_LOG` 與 `tests/integration/bootstrap.test.ts` 之 `VALID_WORKLOG_BODY`（各 3 個 ✓ 與 declared total = 3 完全等式）；2 個 R3「shorter than」斷言已擴充為 `/shorter than|CRITICAL_FORGERY/` 雙路徑（短偽造 evidence 由新 oracle 優先攔截，斷言本意「短 evidence 必被拒絕」維持成立）。
+- **歷史結案保留**：Phase 1/2/3/4/6/8 之 `[x]` 與 `Closed by Tester` 戳記皆完整保留，未經篡改。
+
+### Builder 中斷點聲明（隔離鐵律）
+
+Phase 10「本地語意防偽與對抗性子閘口」之 Builder 工作完成，停在當前對話視窗。請開啟全新 **Tester Session** 接手驗收：
+1. `npm run build` + `npm run lint` + `npm test` + `npm run scan` + `npm run build:dist` 必須五項 exit 0
+2. `npm test` 必須 Test Files 11 passed / Tests 90 passed；Phase 10 新增 15 案全綠
+3. `npm test 2>&1 | grep -c DEP0190` 必須回傳 `0`（Phase 8 收益保留）
+4. 黑箱負例：對手工偽造 WORKLOG（summary "Tests N passed (N)" + 0 ✓ markers）執行 `agent-core check` 必須 exit 1 + 輸出 `SEMANTIC FORGERY DETECTED` 高對比度橫幅 + `shared/tester_input.json` 維持原狀（無 `latest_compiled_payload` 寫入）
+
+Builder 不勾選 `[x]`，T10.1 ~ T10.3 維持 `[/]`。
+
+
 

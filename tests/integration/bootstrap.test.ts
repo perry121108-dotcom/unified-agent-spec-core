@@ -29,6 +29,8 @@ const TSX_LOADER_URL = pathToFileURL(
   resolve(PROJECT_ROOT, 'node_modules/tsx/dist/loader.mjs'),
 ).href;
 
+// Phase 10 — the semantic oracle requires per-case `✓` markers summing to
+// the declared `Tests N passed (N)` total. This fixture enumerates 3 cases.
 const VALID_WORKLOG_BODY = `# WORKLOG
 
 ## 2026-05-26T07:00:00Z — Real bootstrap session
@@ -42,8 +44,16 @@ const VALID_WORKLOG_BODY = `# WORKLOG
 \`\`\`
 $ npm test
 > vitest run
- Test Files  8 passed (8)
-      Tests  57 passed (57)
+
+ RUN  v1.6.1 D:/tmp/bootstrap-fixture
+
+ ✓ tests/integration/bootstrap.test.ts > scaffolding case alpha 2ms
+ ✓ tests/integration/bootstrap.test.ts > scaffolding case beta 1ms
+ ✓ tests/integration/bootstrap.test.ts > scaffolding case gamma 0ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Duration  145ms
 exit 0
 \`\`\`
 `;
@@ -146,7 +156,12 @@ describe('runBootstrap + runGate — cross-repo E2E', () => {
     writeFileSync(join(ws, 'WORKLOG.md'), INVALID_WORKLOG_BODY, 'utf8');
     const res = runGate({ workspaceRoot: ws });
     expect(res.exitCode).toBe(1);
-    expect(res.errors.some((e) => /shorter than/.test(e))).toBe(true);
+    // After Phase 10 the semantic oracle catches structureless short evidence
+    // as CRITICAL_FORGERY before R3's length check. Either rejection signal
+    // proves the gate refused short evidence.
+    expect(
+      res.errors.some((e) => /shorter than/.test(e) || /CRITICAL_FORGERY/.test(e)),
+    ).toBe(true);
     // No stamp on the seeded shared/tester_input.json — non-destructive.
     const after = JSON.parse(readFileSync(join(ws, 'shared/tester_input.json'), 'utf8'));
     expect(after.latest_compiled_payload).toBeUndefined();

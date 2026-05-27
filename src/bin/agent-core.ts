@@ -89,8 +89,31 @@ function main(argv: string[]): number {
         );
       } else {
         for (const err of res.errors) {
-          // eslint-disable-next-line no-console
-          console.error(`[agent-core][FAIL] ${err}`);
+          if (err.startsWith('[CRITICAL_FORGERY]')) {
+            // Phase 10 — semantic forgery oracle rejected the evidence.
+            // High-contrast banner; no compliance stamp was written.
+            // eslint-disable-next-line no-console
+            console.error('');
+            // eslint-disable-next-line no-console
+            console.error('================================================================');
+            // eslint-disable-next-line no-console
+            console.error('  [agent-core][FAIL] SEMANTIC FORGERY DETECTED — HARD BLOCK');
+            // eslint-disable-next-line no-console
+            console.error('================================================================');
+            // eslint-disable-next-line no-console
+            console.error(err);
+            // eslint-disable-next-line no-console
+            console.error('================================================================');
+            // eslint-disable-next-line no-console
+            console.error('  No compliance stamp written to shared/tester_input.json.');
+            // eslint-disable-next-line no-console
+            console.error('  Re-run your test suite and paste the FULL verbose log.');
+            // eslint-disable-next-line no-console
+            console.error('================================================================');
+          } else {
+            // eslint-disable-next-line no-console
+            console.error(`[agent-core][FAIL] ${err}`);
+          }
         }
       }
       return res.exitCode;

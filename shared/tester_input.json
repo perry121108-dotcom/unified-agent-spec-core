@@ -23,7 +23,10 @@
     "WORKLOG.md",
     "shared/tester_input.json"
   ],
-  "bootstrap_commands": ["cd D:/unified-agent-spec-core", "npm install"],
+  "bootstrap_commands": [
+    "cd D:/unified-agent-spec-core",
+    "npm install"
+  ],
   "verification_commands": [
     "npm run build",
     "npm test",
@@ -132,5 +135,13 @@
     "[Phase 6 新增] FeatureSpec AC 區塊一律附加於 TASK.md 末端而非插入既有 Phase 區塊內，作者可手動拖移位置；marker 內容不可移除，否則 idempotency 偵測會失效並導致重複注入。",
     "[Phase 6 新增] loadCiWorkflowTemplate() 若 dist/templates 與 src/templates 雙路徑皆不存在則 throw（desired failure mode：template 不在 = 壞 build）；下游若僅取 dist/ 必須確保 `npm run build:dist` 完整跑過 copy-assets 步驟。"
   ],
-  "handover_protocol_note": "Builder Phase 6 Session 已暫停。請開啟全新 Tester Session 進行驗收。依 acceptance_criteria 順序執行 verification_commands；5 條命令必須 exit=0、總測試 75。預期 dist/bin/agent-core.js + dist/templates/ci-workflow.tpl.yml 均已成功產出。AC-P6-08 之黑箱 E2E 必須於全新 tmpdir 復現（init --spec → check 皆 exit 0；TASK.md 含 marker-fenced AC 區塊）。"
+  "handover_protocol_note": "Builder Phase 6 Session 已暫停。請開啟全新 Tester Session 進行驗收。依 acceptance_criteria 順序執行 verification_commands；5 條命令必須 exit=0、總測試 75。預期 dist/bin/agent-core.js + dist/templates/ci-workflow.tpl.yml 均已成功產出。AC-P6-08 之黑箱 E2E 必須於全新 tmpdir 復現（init --spec → check 皆 exit 0；TASK.md 含 marker-fenced AC 區塊）。",
+  "latest_compiled_payload": {
+    "compiled_at": "2026-05-27T07:06:54.906Z",
+    "gate_role": "Builder",
+    "source_section": "2026-05-26T21:50:00Z — Builder Session：Phase 10 本地語意防偽與對抗性子閘口",
+    "next_role": "Tester",
+    "prompts_directory_path": "prompts",
+    "evidence_log_chars": 15855
+  }
 }

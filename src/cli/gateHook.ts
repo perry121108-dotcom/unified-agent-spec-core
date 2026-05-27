@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compileMarkdownToHandoff } from '../compiler/specCompiler.js';
 import { validateHandoffData } from '../validator/schemaValidator.js';
+import { validateLogStructure } from '../validator/semanticValidator.js';
 import type { AgentRole } from '../types/types.js';
 
 export interface GateHookOptions {
@@ -51,6 +52,27 @@ export function runGate(options: GateHookOptions = {}): GateHookResult {
 
   const role = options.role ?? payload.current_role ?? DEFAULT_ROLE;
 
+  // Phase 10 — Semantic & Adversarial Sub-gate.
+  //
+  // Run the deterministic oracle BEFORE schemaValidator. Reason: schema R3 only
+  // proves the evidence log clears a minimum length (≥32 chars), which a forger
+  // trivially satisfies with `Tests 75 passed (75)`. The structural sub-gate
+  // proves the per-case `✓` track sums to the declared aggregate — pure-summary
+  // forgery cannot pass. On forgery, abort BEFORE any stamping happens.
+  const evidenceForOracle = payload.execution_evidence_log ?? '';
+  if (evidenceForOracle.length > 0) {
+    try {
+      validateLogStructure(evidenceForOracle);
+    } catch (e) {
+      return {
+        exitCode: 1,
+        errors: [(e as Error).message],
+        payload,
+        role,
+      };
+    }
+  }
+
   const result = validateHandoffData(payload as unknown, role, { workspaceRoot: root });
 
   if (!result.success) {
@@ -93,8 +115,31 @@ function main(): void {
     console.log(`[gateHook] PASS role=${res.role} next=${res.payload.next_role ?? '(none)'}`);
   } else {
     for (const err of res.errors) {
-      // eslint-disable-next-line no-console
-      console.error(`[gateHook][FAIL] ${err}`);
+      if (err.startsWith('[CRITICAL_FORGERY]')) {
+        // High-contrast banner for semantic forgery — the Phase 10 deterministic
+        // oracle rejected the evidence body. No compliance stamp was written.
+        // eslint-disable-next-line no-console
+        console.error('');
+        // eslint-disable-next-line no-console
+        console.error('================================================================');
+        // eslint-disable-next-line no-console
+        console.error('  [gateHook][FAIL] SEMANTIC FORGERY DETECTED — HARD BLOCK');
+        // eslint-disable-next-line no-console
+        console.error('================================================================');
+        // eslint-disable-next-line no-console
+        console.error(err);
+        // eslint-disable-next-line no-console
+        console.error('================================================================');
+        // eslint-disable-next-line no-console
+        console.error('  No compliance stamp written to shared/tester_input.json.');
+        // eslint-disable-next-line no-console
+        console.error('  Re-run your test suite and paste the FULL verbose log.');
+        // eslint-disable-next-line no-console
+        console.error('================================================================');
+      } else {
+        // eslint-disable-next-line no-console
+        console.error(`[gateHook][FAIL] ${err}`);
+      }
     }
   }
   process.exit(res.exitCode);

@@ -38,10 +38,25 @@ function spawnGateScript(cwd: string) {
   });
 }
 
+/**
+ * Phase-10-compliant synthetic vitest log. The semantic oracle requires:
+ *   - canonical `Tests N passed (N)` summary line
+ *   - exactly N `✓ tests/...` per-case markers
+ *   - at least one `tests/.../*.test.ts` path reference
+ * Per-case marker count (3) === declared total (3).
+ */
 const VALID_LOG = `$ npm test
 > vitest run
- Test Files  5 passed (5)
-      Tests  26 passed (26)
+
+ RUN  v1.6.1 D:/tmp/gate-fixture
+
+ ✓ tests/cli/gateHook.test.ts > runGate — sample assertion A 1ms
+ ✓ tests/cli/gateHook.test.ts > runGate — sample assertion B 0ms
+ ✓ tests/cli/gateHook.test.ts > runGate — sample assertion C 1ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Duration  120ms
 exit 0`;
 
 function writeWorklog(opts: {
@@ -115,7 +130,7 @@ describe('runGate — programmatic core (no process.exit)', () => {
     expect(stamped.latest_compiled_payload?.next_role).toBe('Tester');
   });
 
-  it('FAIL: short evidence log (<32 chars) triggers R3 error and exitCode 1', () => {
+  it('FAIL: short evidence log (<32 chars) is rejected — R3 or Phase 10 forgery oracle, exitCode 1', () => {
     const ws = setupWorkspace({
       currentRole: 'Builder',
       nextRole: 'Tester',
@@ -125,7 +140,13 @@ describe('runGate — programmatic core (no process.exit)', () => {
     workspaces.push(ws);
     const res = runGate({ workspaceRoot: ws });
     expect(res.exitCode).toBe(1);
-    expect(res.errors.some((e) => /shorter than/.test(e))).toBe(true);
+    // After Phase 10 the semantic oracle fires FIRST on short+structureless
+    // evidence (correctly classifying it as forgery). R3 length check fires
+    // only when evidence has Vitest fingerprint but body < 32 chars. Either
+    // signal proves the gate rejected short evidence.
+    expect(
+      res.errors.some((e) => /shorter than/.test(e) || /CRITICAL_FORGERY/.test(e)),
+    ).toBe(true);
   });
 
   it('FAIL: missing Execution_Evidence block triggers R3 error and exitCode 1', () => {

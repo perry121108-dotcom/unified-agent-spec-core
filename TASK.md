@@ -81,3 +81,12 @@
 - [x] **T8.1** 將 Phase 8 章節登入 `TASK.md` 與 `WORKLOG.md`；T8.1–T8.3 全數標記為 `[/]` 進行中
 - [x] **T8.2** 重構 `tests/cli/gateHook.test.ts` 與 `tests/integration/bootstrap.test.ts` 內所有 `spawnSync(TSX_BIN, [...], { shell: ... })` 為 `spawnSync(execPath, ['--import', 'tsx', SCRIPT, ...args], { shell: false })`；移除對 `tsx.cmd` / `tsx` 二進位的依賴與 `TSX_BIN` 常數
 - [x] **T8.3** Builder 自測：`npm run build` + `npm test` + `npm run lint` 全綠；vitest 輸出**不再包含 DEP0190 informational warning**；累積測試數仍 ≥ 75
+
+## Phase 10 — 本地語意防偽與對抗性子閘口（Semantic & Adversarial Gate）
+
+> Phase 10 啟動：2026-05-26T21:50:00Z（Builder / Security Architect 角色）
+> 任務範圍：建立無法被 AI 字串拼接偽造的防禦機制。透過 `<Execution_Evidence>` 內部 AST 模擬解析 + 數學交叉比對（Deterministic Oracle）實施剛性不變式斷言，澈底粉碎 AI 代理人的「偷懶合謀聯盟」。
+
+- [/] **T10.1** 於 `prompts/adversarial_auditor.txt` 建立隔離的對抗性稽核規範（御用反對者人格契約 — Vitest verbose 軌跡 / per-file ↔ aggregate 等式 / 時間與 PID 合理性 / 詞法 AI 拼湊破綻）
+- [/] **T10.2** 於 `src/validator/semanticValidator.ts` 實作語意與結構斷言引擎 `validateLogStructure(evidenceText)`：文本抽取（`<Execution_Evidence>` 解包）+ 微觀行掃描（`✓` 符號計數 + `tests/*.test.ts` 路徑抽取）+ 宏觀摘要提取（`Tests N passed (N)`）+ 剛性數學不變式斷言（mismatch ⇒ `[CRITICAL_FORGERY]` 拋出）；CRLF/LF 雙行尾相容
+- [/] **T10.3** 將防偽閘口掛載至 `src/cli/gateHook.ts` 之 `runGate`：於 schemaValidator 前強制執行語意追蹤；觸發偽造 ⇒ 高對比度錯誤橫幅 + `process.exit(1)` 硬性阻斷 + 不寫入合規戳記；更新 `tests/cli/gateHook.test.ts` 與 `tests/integration/bootstrap.test.ts` 之 VALID_LOG 為 Phase-10-compliant fixture（per-case ✓ 與 declared total 完全等式）；新增 `tests/validator/semanticValidator.test.ts` 共 14 案（PASS 路徑 3 + FORGED 路徑 5 + 計數/解包工具 5 + 錯誤訊息診斷 1）
