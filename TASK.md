@@ -127,3 +127,13 @@
 
 - [x] ARCH_PLAN phase-14-hotfix: broaden vitest regex for inline tests [Closed by Tester @ 2026-05-27]
 - [x] T14.1 修 `src/validator/semanticValidator.ts` 之 `VITEST_FILE_REF`;新增 ≥1 案 regression test 覆蓋 inline-test 路徑(src/lib + .tsx 變體);累積測試 166 → ≥167;5-Gate 全綠;tag v0.8.1 [Closed by Tester @ 2026-05-27]
+
+## Phase 14 (Complete): 影武者防禦 — 動態時序鹽與源碼指紋鎖定 (Temporal Salting)
+
+> 啟動：2026-05-27T23:00:00Z（Builder / Principal Architect 角色）
+> 任務範圍：將四道閘口從「事後內容驗證」延伸至「事後密碼學綁定」。新增 Tier 3.5「影武者神諭」於 Tier 3 (semantic forgery oracle) 與 Tier 4 (schema validator) 之間。攻擊面:AI 代理人重放歷史合規日誌(Replay Attack)。防禦:強制 `<Execution_Evidence>` 內嵌 `shadow_token = sha256( sha256(HEAD_SHA :: minute_stamp) :: file_fingerprint )`,雙重綁定當前 commit + 分鐘級時間 + 源碼指紋,任何漂移即拋 `[SHADOW_TOKEN_FORGERY]`。
+
+- [x] ARCH_PLAN phase-14-complete-shadow: implement shadow-warrior oracle — temporal salt + mutation fingerprint sha256 binding, hooked into runGate as Tier 3.5 between semantic forgery oracle and schema validator; dogfood by keeping all new .ts files under depth ≤ 4 + block ≤ 60
+- [ ] T14.1 於 `src/validator/shadowWarriorOracle.ts` 實作時序鹽與代碼指紋密碼學雜湊計算引擎 [/]
+- [ ] T14.2 升級 `semanticValidator.ts` 與 `gateHook.ts`，將影武者驗證掛載為 Post-facto Tier 3.5 門禁，攔截 `[SHADOW_TOKEN_FORGERY]` [/]
+- [ ] T14.3 於 `tests/` 追加 10 案以上時序重放、指紋篡改等黑箱對抗性測試，執行 5-Gate 本地回歸 [/]

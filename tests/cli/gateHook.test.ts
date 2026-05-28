@@ -242,6 +242,7 @@ describe('runGate — Phase 12 archPlan PASS paths', () => {
     const res = runGate({
       workspaceRoot: ws,
       mutationsOverride: ['src/cli/gateHook.ts'],
+      disableShadowWarrior: true, // Phase 14 isolation: this test focuses on Phase 12 archPlan
     });
     expect(res.exitCode).toBe(0);
     expect(res.errors).toEqual([]);
@@ -435,5 +436,139 @@ describe('gateHook — subprocess hard-block (process.exit verification)', () =>
     const out = spawnGateScript(ws);
     expect(out.status, `stderr=${out.stderr}`).toBe(0);
     expect(out.stdout).toMatch(/\[gateHook\] PASS role=Builder next=Tester/);
+  });
+});
+
+describe('runGate — Phase 14 shadow-warrior gate', () => {
+  const SHADOW_TASK_WITH_PLAN =
+    '# TASK\n- [x] ARCH_PLAN phase-14-shadow: dogfood shadow warrior\n- [/] T14.1\n';
+  const FIXED_SHA = '1234567890abcdef1234567890abcdef12345678';
+  const FIXED_NOW = new Date(Date.UTC(2026, 4, 27, 23, 0, 0));
+
+  it('SHADOW PASS: valid token derived from current SHA + minute + file fingerprint → runGate exitCode 0', async () => {
+    const oracle = await import('../../src/validator/shadowWarriorOracle.js');
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    writeFileSync(join(ws, 'TASK.md'), SHADOW_TASK_WITH_PLAN, 'utf8');
+    const fileContent = 'export const greet = () => "hi";\n';
+    writeFileSync(join(ws, 'src-file.ts'), fileContent, 'utf8');
+    // Move under src/ so filterCodeMutations keeps it
+    mkdirSync(join(ws, 'src'), { recursive: true });
+    writeFileSync(join(ws, 'src/greet.ts'), fileContent, 'utf8');
+
+    const fingerprint = oracle.computeMutationFingerprint({
+      cwd: ws,
+      paths: ['src/greet.ts'],
+    });
+    const salt = oracle.computeTemporalSalt(
+      FIXED_SHA,
+      oracle.getMinuteTimestamp(FIXED_NOW),
+    );
+    const token = oracle.computeShadowToken(salt, fingerprint);
+
+    const evidenceWithToken =
+      `shadow_token: ${token}\n` + VALID_LOG;
+    const wlPath = join(ws, 'WORKLOG.md');
+    const wl = readFileSync(wlPath, 'utf8').replace(VALID_LOG, evidenceWithToken);
+    writeFileSync(wlPath, wl, 'utf8');
+
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['src/greet.ts'],
+      shadowNow: FIXED_NOW,
+      shadowShaOverride: FIXED_SHA,
+    });
+    expect(res.exitCode, `errors=${res.errors.join('|')}`).toBe(0);
+  });
+
+  it('SHADOW BLOCK: missing shadow_token line in evidence with src/ mutation → exitCode 1 [SHADOW_TOKEN_FORGERY]', async () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG, // no shadow_token embedded
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    writeFileSync(join(ws, 'TASK.md'), SHADOW_TASK_WITH_PLAN, 'utf8');
+    mkdirSync(join(ws, 'src'), { recursive: true });
+    writeFileSync(join(ws, 'src/touched.ts'), 'export const x = 1;\n', 'utf8');
+
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['src/touched.ts'],
+      shadowNow: FIXED_NOW,
+      shadowShaOverride: FIXED_SHA,
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.errors[0]).toMatch(/\[SHADOW_TOKEN_FORGERY\]/);
+    expect(res.errors[0]).toMatch(/No `shadow_token/);
+    const stamped = JSON.parse(
+      readFileSync(join(ws, 'shared/tester_input.json'), 'utf8'),
+    );
+    expect(stamped.latest_compiled_payload).toBeUndefined();
+  });
+
+  it('SHADOW BLOCK: stale token (from 10 minutes ago) outside acceptance window → exitCode 1', async () => {
+    const oracle = await import('../../src/validator/shadowWarriorOracle.js');
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    writeFileSync(join(ws, 'TASK.md'), SHADOW_TASK_WITH_PLAN, 'utf8');
+    mkdirSync(join(ws, 'src'), { recursive: true });
+    const fileContent = 'export const y = 2;\n';
+    writeFileSync(join(ws, 'src/stale.ts'), fileContent, 'utf8');
+
+    const tenMinutesAgo = new Date(FIXED_NOW.getTime() - 10 * 60_000);
+    const fingerprint = oracle.computeMutationFingerprint({
+      cwd: ws,
+      paths: ['src/stale.ts'],
+    });
+    const staleSalt = oracle.computeTemporalSalt(
+      FIXED_SHA,
+      oracle.getMinuteTimestamp(tenMinutesAgo),
+    );
+    const staleToken = oracle.computeShadowToken(staleSalt, fingerprint);
+
+    const evidenceWithStaleToken = `shadow_token: ${staleToken}\n` + VALID_LOG;
+    const wlPath = join(ws, 'WORKLOG.md');
+    const wl = readFileSync(wlPath, 'utf8').replace(VALID_LOG, evidenceWithStaleToken);
+    writeFileSync(wlPath, wl, 'utf8');
+
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['src/stale.ts'],
+      shadowNow: FIXED_NOW,
+      shadowShaOverride: FIXED_SHA,
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.errors[0]).toMatch(/\[SHADOW_TOKEN_FORGERY\]/);
+  });
+
+  it('SHADOW PASSTHROUGH: pure-docs mutation (no src/tests changes) does NOT require shadow_token', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG, // intentionally no shadow_token
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    // Pure-docs mutations only — filterCodeMutations returns [] → shadow gate skips
+    const res = runGate({
+      workspaceRoot: ws,
+      mutationsOverride: ['README.md', 'WORKLOG.md'],
+      shadowNow: FIXED_NOW,
+      shadowShaOverride: FIXED_SHA,
+    });
+    expect(res.exitCode).toBe(0);
+    expect(res.errors).toEqual([]);
   });
 });

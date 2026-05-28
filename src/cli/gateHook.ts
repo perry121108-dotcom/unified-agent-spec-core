@@ -5,8 +5,12 @@ import { spawnSync } from 'node:child_process';
 import { compileMarkdownToHandoff } from '../compiler/specCompiler.js';
 import { validateHandoffData } from '../validator/schemaValidator.js';
 import { validateLogStructure } from '../validator/semanticValidator.js';
-import { assertArchPlanConsistency } from '../validator/archPlanValidator.js';
+import {
+  assertArchPlanConsistency,
+  filterCodeMutations,
+} from '../validator/archPlanValidator.js';
 import { analyzeCodeSlop, formatSlopError } from '../linter/codeSlopLinter.js';
+import { verifyShadowToken } from '../validator/shadowWarriorOracle.js';
 import type { AgentRole } from '../types/types.js';
 
 export interface GateHookOptions {
@@ -19,6 +23,16 @@ export interface GateHookOptions {
    * instead of shelling out to git. Production callers leave this undefined.
    */
   mutationsOverride?: string[];
+  /**
+   * Phase 14 test seam: skip the shadow-warrior gate entirely. Production
+   * code never sets this; existing tests for the other tiers use it to
+   * isolate the gate under test.
+   */
+  disableShadowWarrior?: boolean;
+  /** Phase 14 test seam: pin "now" to a deterministic Date for replay tests. */
+  shadowNow?: Date;
+  /** Phase 14 test seam: pin HEAD SHA so tests do not depend on real git state. */
+  shadowShaOverride?: string;
 }
 
 export interface GateHookResult {
@@ -123,6 +137,44 @@ function runSemanticOracleStep(payload: CompiledPayload): string | null {
   return null;
 }
 
+/**
+ * Phase 14 — Shadow-Warrior Tier 3.5 (temporal salt + mutation fingerprint).
+ *
+ * Verifies the `shadow_token` line embedded in the evidence body matches a
+ * fresh sha256( salt :: fingerprint ) for the current HEAD SHA, the current
+ * minute-stamp (±1 minute window), and the sha256 of the code-mutation set.
+ *
+ * Short-circuits in three benign cases so the gate stays compatible with
+ * pre-Phase-14 fixtures and with pure-docs commits:
+ *   - `disableShadowWarrior` test seam is set
+ *   - no code mutations under src/ or tests/ (no replay risk)
+ *   - no evidence body (semantic oracle already short-circuited)
+ */
+function runShadowWarriorStep(
+  payload: CompiledPayload,
+  mutations: string[],
+  root: string,
+  options: GateHookOptions,
+): string | null {
+  if (options.disableShadowWarrior) return null;
+  const codePaths = filterCodeMutations(mutations);
+  if (codePaths.length === 0) return null;
+  const evidence = payload.execution_evidence_log ?? '';
+  if (evidence.length === 0) return null;
+  try {
+    verifyShadowToken({
+      cwd: root,
+      mutations: codePaths,
+      evidenceText: evidence,
+      now: options.shadowNow,
+      shaOverride: options.shadowShaOverride,
+    });
+    return null;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
+
 function stampCompliance(
   root: string,
   payload: CompiledPayload,
@@ -209,6 +261,9 @@ export function runGate(options: GateHookOptions = {}): GateHookResult {
   const oracleErr = runSemanticOracleStep(payload);
   if (oracleErr) return withErrResult(oracleErr, payload, role);
 
+  const shadowErr = runShadowWarriorStep(payload, mutations, root, options);
+  if (shadowErr) return withErrResult(shadowErr, payload, role);
+
   const schemaResult = validateHandoffData(payload as unknown, role, { workspaceRoot: root });
   if (!schemaResult.success) return { exitCode: 1, errors: schemaResult.errors, payload, role };
 
@@ -264,10 +319,23 @@ function renderCodeSlopBanner(err: string): void {
   bannerLine();
 }
 
+function renderShadowTokenBanner(err: string): void {
+  console.error('');
+  bannerLine();
+  console.error('=== SHADOW TOKEN FORGERY DETECTED - HARD BLOCK ===');
+  bannerLine();
+  console.error(err);
+  bannerLine();
+  console.error('  No compliance stamp written to shared/tester_input.json.');
+  console.error('  Re-compute shadow_token via shadowWarriorOracle and embed within 1 minute.');
+  bannerLine();
+}
+
 function renderErrorBanner(err: string): void {
   if (err.startsWith('[ILLEGAL_MUTATION]')) return renderIllegalMutationBanner(err);
   if (err.startsWith('[CRITICAL_FORGERY]')) return renderForgeryBanner(err);
   if (err.startsWith('[CODE_SLOP_DETECTED]')) return renderCodeSlopBanner(err);
+  if (err.startsWith('[SHADOW_TOKEN_FORGERY]')) return renderShadowTokenBanner(err);
   console.error(`[gateHook][FAIL] ${err}`);
 }
 
