@@ -2000,3 +2000,70 @@ Tester Session 接手執行五重門禁(build / lint / test 195 / scan / build:d
 - gateHook 整合 4 案(SHADOW PASS / BLOCK missing / BLOCK stale / PASSTHROUGH docs-only)實證跨 Tier 編排無誤;Phase 12/13/14 三層自舉 dogfood 鏈條延續至第四層。
 
 > Phase 14 (Complete Shadow Warrior) 結案狀態:**Closed by Tester @ 2026-05-28**(五重機器驗證 exit=0 × 5;Test Files 14 / Tests 195 passed;DEP0190=0;scan baseline `scanned=22 findings=39 fail=33 warn=6` 與 Phase 11/12/13/14a 逐字節一致;commit `c8d030a` + tag `v0.9.0` 同步推流)
+
+---
+
+## 2026-05-28T00:00:00Z — Builder / Growth Engineer Phase 16 啟動
+
+- **角色**：Builder / Growth Engineer
+- **任務**：T16.1 ~ T16.3 — 生態雙向轉譯器 (Ecosystem Spec Adapter),IR + 雙向轉譯 + 最小權限包裹
+- **狀態**：[/] 進行中(Builder 不自勾 `[x]`,等待 Tester 接手驗收)
+
+### Phase 16 立論
+
+AgentCore 的四 Tier + 影武者神諭已是技術完備的治理工具,但生態現實是 **碎片化**:
+- Cursor 用戶用 `.cursorrules` 寫軟性規則
+- Claude Code 用戶用 `CLAUDE.md` 寫專案記憶
+- 微軟 Semantic Kernel 用 plugin manifest
+- LangGraph 用狀態圖 JSON
+
+每個專案要採用 AgentCore 都要付出**翻譯成本**。Phase 16 用一個小型靜態映射 adapter 把這個成本歸零:
+
+```
+[.cursorrules]                              [LangGraph state graph JSON]
+[CLAUDE.md]      ──IMPORT──►  IR  ──EXPORT──►  [Semantic Kernel plugin]
+```
+
+### 設計鐵律(已完成實作鎖死)
+
+1. **零外部依賴**:純 Node.js `node:fs` + 字串操作,無 AST / parser combinator / compiler。
+2. **AgentSpecIR 為 canonical POJO**:`metadata` + `rules: AgentRule[]` + 選用 `roles?: AgentRoleNode[]`。
+3. **規則啟發式分類** → 自動掛接 AgentCore 四 tier(最小權限包裹層):
+   - `security` (.env / token / auth) → `intent-gate` (Phase 12)
+   - `evidence` (test / coverage / verify) → `forgery-oracle` (Phase 10/11)
+   - `style` (format / prettier / indent) → `geometry-gate` (Phase 13)
+   - `process` (commit / PR / branch / merge) → `schema-validator` (Phase 1-3)
+   - `unknown` → `advisory` (不硬阻斷,僅紀錄)
+4. **無損等冪性**:`importFromCursorRules` → `exportToSemanticKernel` → 重新派生 IR 維持 id/text 同構;`exportToLangGraph` 重 nodes 不丟資料。
+5. **idempotent injectTierWrappers**:重複呼叫產出 byte-identical IR(已測試)。
+
+### 對外暴露 API
+
+| 函式 | 用途 |
+|---|---|
+| `importFromCursorRules(text, opts?)` | 解析 .cursorrules markdown → AgentSpecIR |
+| `importFromClaudeMd(text, opts?)` | 解析 CLAUDE.md → AgentSpecIR(CRLF 雙行尾相容) |
+| `importFromPath(absPath, source, opts?)` | 從檔案路徑直接讀取並轉譯 |
+| `exportToLangGraph(ir)` | IR → LangGraph state graph(rule nodes + role edges) |
+| `exportToSemanticKernel(ir)` | IR → SK plugin descriptor(每 rule 一個 function + tier/severity params) |
+| `injectTierWrappers(ir)` | 重跑分類器,修正手工編輯 IR 的 enforced_by 漂移 |
+| `categorizeRule(text)` / `tierForCategory(cat)` | 對外暴露,允許自訂 mapping |
+
+### 自舉 dogfood 證明
+
+<Execution_Evidence>
+$ npx tsx -e "analyzeCodeSlop(['src/adapter/specAdapterCore.ts', 'tests/adapter/specAdapterCore.test.ts'])"
+scanned 2 / violations 0
+=== Phase 16 explicit dogfood CLEAN ===
+</Execution_Evidence>
+
+兩個新檔(adapter 主檔 + 測試)均通過 Phase 13 codeSlop:depth ≤ 4 + block ≤ 60 effective lines。鐵閘繼續證明自己有能力擋住自己。
+
+### 測試矩陣擴充
+
+- 新增 `tests/adapter/specAdapterCore.test.ts` 27 案(categorize 5 + tier mapping 5 + cursor import 6 + claude import 2 + tier wrapper 2 + langgraph export 3 + SK export 2 + round-trip 2)
+- 總案數從 195 → 222(+27,超過 spec 210 下限 +12)
+
+### 預期下一步
+
+Tester Session 接手執行五重門禁(build / lint / test 222 / scan / build:dist),確認 T16.1 / T16.2 / T16.3 三條任務由 `[/]` 升為 `[x]`。
