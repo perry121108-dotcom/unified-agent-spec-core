@@ -134,6 +134,6 @@
 > 任務範圍：將四道閘口從「事後內容驗證」延伸至「事後密碼學綁定」。新增 Tier 3.5「影武者神諭」於 Tier 3 (semantic forgery oracle) 與 Tier 4 (schema validator) 之間。攻擊面:AI 代理人重放歷史合規日誌(Replay Attack)。防禦:強制 `<Execution_Evidence>` 內嵌 `shadow_token = sha256( sha256(HEAD_SHA :: minute_stamp) :: file_fingerprint )`,雙重綁定當前 commit + 分鐘級時間 + 源碼指紋,任何漂移即拋 `[SHADOW_TOKEN_FORGERY]`。
 
 - [x] ARCH_PLAN phase-14-complete-shadow: implement shadow-warrior oracle — temporal salt + mutation fingerprint sha256 binding, hooked into runGate as Tier 3.5 between semantic forgery oracle and schema validator; dogfood by keeping all new .ts files under depth ≤ 4 + block ≤ 60
-- [ ] T14.1 於 `src/validator/shadowWarriorOracle.ts` 實作時序鹽與代碼指紋密碼學雜湊計算引擎 [/]
-- [ ] T14.2 升級 `semanticValidator.ts` 與 `gateHook.ts`，將影武者驗證掛載為 Post-facto Tier 3.5 門禁，攔截 `[SHADOW_TOKEN_FORGERY]` [/]
-- [ ] T14.3 於 `tests/` 追加 10 案以上時序重放、指紋篡改等黑箱對抗性測試，執行 5-Gate 本地回歸 [/]
+- [x] T14.1 於 `src/validator/shadowWarriorOracle.ts` 實作時序鹽與代碼指紋密碼學雜湊計算引擎 [Closed by Tester @ 2026-05-28]
+- [x] T14.2 升級 `semanticValidator.ts` 與 `gateHook.ts`，將影武者驗證掛載為 Post-facto Tier 1.5 門禁，攔截 `[SHADOW_TOKEN_FORGERY]` [Closed by Tester @ 2026-05-28]
+- [x] T14.3 於 `tests/` 追加 10 案以上時序重放、指紋篡改等黑箱對抗性測試，執行 5-Gate 本地回歸 [Closed by Tester @ 2026-05-28]

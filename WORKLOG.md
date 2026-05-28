@@ -1989,3 +1989,14 @@ mutations: 5 / scanned .ts: 4 / violations: 0
 ### 預期下一步
 
 Tester Session 接手執行五重門禁(build / lint / test 195 / scan / build:dist),確認 T14.1 / T14.2 / T14.3 三條任務由 `[/]` 升為 `[x]`,並評估是否簽發 v0.9.0 完全體版號。
+
+---
+
+## 2026-05-28 — Tester 正式驗收 (Phase 14 Complete Shadow Warrior)
+
+✅ Tester 正式驗收成功 @ 2026-05-28
+- 實測 5-Gate Staircase 全數 exit 0,累積 14 個測試檔案、195 案測試 100% 全綠通過。
+- 影武者神諭密碼學雙重綁定(時序鹽 + 源碼指紋)完整實作於 `src/validator/shadowWarriorOracle.ts`,通過 21 案 replay 攻擊矩陣黑箱對抗驗證(stale SHA / stale minute / fingerprint drift / missing token / fabricated hex / valid PASS / minute-boundary tolerance / passthrough)。
+- gateHook 整合 4 案(SHADOW PASS / BLOCK missing / BLOCK stale / PASSTHROUGH docs-only)實證跨 Tier 編排無誤;Phase 12/13/14 三層自舉 dogfood 鏈條延續至第四層。
+
+> Phase 14 (Complete Shadow Warrior) 結案狀態:**Closed by Tester @ 2026-05-28**(五重機器驗證 exit=0 × 5;Test Files 14 / Tests 195 passed;DEP0190=0;scan baseline `scanned=22 findings=39 fail=33 warn=6` 與 Phase 11/12/13/14a 逐字節一致;commit `c8d030a` + tag `v0.9.0` 同步推流)
