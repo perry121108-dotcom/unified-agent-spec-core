@@ -2079,3 +2079,55 @@ Tester Session 接手執行五重門禁(build / lint / test 222 / scan / build:d
 - Phase 12/13/14/16 四層自舉 dogfood 鏈條延續至第五層:adapter 主檔與測試檔同時通過 depth ≤ 4 + block ≤ 60 codeSlop 幾何約束;生態適配層證明自己在 AgentCore 自家鐵閘下亦能合規誕生。
 
 > Phase 16 (Ecosystem Spec Adapter) 結案狀態:**Closed by Tester @ 2026-05-28**(五重機器驗證 exit=0 × 5;Test Files 15 / Tests 222 passed;DEP0190=0;scan baseline `scanned=22 findings=39 fail=33 warn=6` 與 Phase 11/12/13/14a/14-complete 逐字節一致;commit `94307cc` 已推流;跨生態翻譯成本歸零)
+
+---
+
+## 2026-05-28T12:00:00Z — Builder / Principal Architect Phase 17 (v1.0.0) 啟動
+
+- **角色**：Builder / Principal Architect
+- **任務**：T17.1 ~ T17.3 — 聲明式權限沙箱神諭與非對稱審批流
+- **狀態**：[/] 進行中(Builder 不自勾 `[x]`,等待 Tester 接手驗收;Phase 17 為 v1.0.0 大結局)
+
+### Phase 17 立論
+
+前 16 個 Phase 已封死「靜態」與「防偽」攻擊面:
+- Phase 10/11:測試 log 偽造 → `[CRITICAL_FORGERY]`
+- Phase 12:無設計就動工 → `[ILLEGAL_MUTATION]`
+- Phase 13:AI Slop 幾何膨脹 → `[CODE_SLOP_DETECTED]`
+- Phase 14:重放歷史合規 log → `[SHADOW_TOKEN_FORGERY]`
+
+但仍存在**執行期行為攻擊面**:AI 代理人在通過所有靜態檢查後,仍可在 Skill 內呼叫高危動作(刪檔 / 對外網路 / 越權路徑存取)。Phase 17 用聲明式 Capability Manifest + 非對稱人類審批堵死最後一道。
+
+### 設計鐵律(已實作鎖死)
+
+1. **Manifest 嚴格 schema**:`{allow_outbound: bool, allowed_paths: string[], danger_rating: 'low'|'medium'|'high'}` — 任何欄位漂移即視為 null(整體 skip)
+2. **Pre-flight 順序**:archPlan(intent) → codeSlop(geometry) → sandbox(capability) — 三道 Pre-flight 順發,首個 fail 即收手
+3. **mutex 兩條映射**:`danger_rating === 'high'` 觸發 `APPROVE_HIGH_RISK` / `allow_outbound === true` 觸發 `APPROVE_OUTBOUND_ACCESS`
+4. **APPROVE bullet 必為人類手工**:`/-\s+\[x\]\s+APPROVE_([A-Z_]+)/gi` — case-insensitive 但必須是 list-marker bullet 開頭,prose 提及不算
+5. **零自動 resume**:gate 失敗 → exit 1 → 人類手工貼 bullet 到 TASK.md → 重跑(這是「非對稱」的真意 — 機器只能 deny,人才能 grant)
+6. **null manifest = skip**:無 agent-governance.json 或無 sandbox 區段 → gate 透明放行(零誤殺、零治理死鎖)
+
+### 安全防禦斷言等式
+
+$$\text{Verified} \equiv \text{Manifest.Match(Constraints)} \quad \land \quad (\text{Danger(High)} \rightarrow \text{UserSigned(TASK.md)})$$
+
+### 自舉 dogfood
+
+<Execution_Evidence>
+$ npx tsx -e "analyzeCodeSlop(['src/validator/sandboxOracle.ts', 'src/cli/gateHook.ts', 'tests/validator/sandboxOracle.test.ts', 'tests/cli/gateHook.test.ts'])"
+scanned 4 / violations 0
+=== Phase 17 dogfood CLEAN ===
+</Execution_Evidence>
+
+4 個變更檔(主檔 + 測試 + gateHook 重構 + integration test)同時通過 depth ≤ 4 + block ≤ 60。鐵閘繼續證明自己有能力擋住自己。
+
+### 測試矩陣擴充
+
+- 新增 `tests/validator/sandboxOracle.test.ts` 23 案:parseManifest 嚴格 schema 5 + readSandboxFromGovernanceJson 4 + findGrantedApprovals 3 + determineRequiredApprovals 4 + audit/enforce 整合 7
+- 新增 `tests/cli/gateHook.test.ts` Phase 17 integration 4 案(PASS low-danger / SKIP no-manifest / BLOCK no-approval / RESUME with bullets)
+- 1 個既有 Phase 12 PRE-FLIGHT PASS 測試已於 Phase 14 加 disableShadowWarrior;Phase 17 sandbox 因預設無 manifest 自動 skip,無需再加 seam
+- 總案數從 222 → 249(+27,超過 spec 240 下限 +9 案)
+
+### 預期下一步
+
+Tester Session 接手執行五重門禁(build / lint / test 249 / scan / build:dist),確認 T17.1 / T17.2 / T17.3 三條任務由 `[/]` 升為 `[x]`,並簽發 **v1.0.0** 正式版 annotated tag,為 v1 大結局定格。

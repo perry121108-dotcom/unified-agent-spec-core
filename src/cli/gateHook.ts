@@ -11,6 +11,11 @@ import {
 } from '../validator/archPlanValidator.js';
 import { analyzeCodeSlop, formatSlopError } from '../linter/codeSlopLinter.js';
 import { verifyShadowToken } from '../validator/shadowWarriorOracle.js';
+import {
+  enforceSandbox,
+  readSandboxFromGovernanceJson,
+  readSandboxFromPath,
+} from '../validator/sandboxOracle.js';
 import type { AgentRole } from '../types/types.js';
 
 export interface GateHookOptions {
@@ -33,6 +38,11 @@ export interface GateHookOptions {
   shadowNow?: Date;
   /** Phase 14 test seam: pin HEAD SHA so tests do not depend on real git state. */
   shadowShaOverride?: string;
+  /**
+   * Phase 17 test seam: inject the raw `agent-governance.json` text directly
+   * instead of reading from disk. Production callers leave this undefined.
+   */
+  agentGovernanceOverride?: string;
 }
 
 export interface GateHookResult {
@@ -96,19 +106,31 @@ export function getWorkspaceMutations(cwd: string = process.cwd()): string[] {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Pre-flight gates (Phase 12 archPlan + Phase 13 codeSlop)                   */
+/* Pre-flight gates (Phase 12 archPlan + Phase 13 codeSlop + Phase 17 sandbox)*/
 /* -------------------------------------------------------------------------- */
 
+function loadSandboxManifest(
+  root: string,
+  override: string | undefined,
+): ReturnType<typeof readSandboxFromPath> {
+  if (override !== undefined) {
+    return readSandboxFromGovernanceJson(override);
+  }
+  return readSandboxFromPath(resolve(root, 'agent-governance.json'));
+}
+
 /**
- * Phase 12 + Phase 13 fused Pre-flight stage. Runs intent gate first
- * (archPlan), then geometric gate (codeSlop). First failure wins; we do NOT
- * try to surface both since the agent should fix one structural issue at a
- * time. Returns `null` on pass, the error message on block.
+ * Phase 12 + Phase 13 + Phase 17 fused Pre-flight stage. Runs intent gate
+ * first (archPlan), then geometric gate (codeSlop), then declarative sandbox
+ * approval gate. First failure wins; we do NOT try to surface multiple
+ * structural issues at once since the agent should fix them one at a time.
+ * Returns `null` on pass, the error message on block.
  */
 function runPreflightGates(
   mutations: string[],
   taskMd: string,
   root: string,
+  options: GateHookOptions,
 ): string | null {
   try {
     assertArchPlanConsistency(mutations, taskMd);
@@ -118,6 +140,12 @@ function runPreflightGates(
   const slopReport = analyzeCodeSlop(mutations, root);
   if (slopReport.violations.length > 0) {
     return formatSlopError(slopReport);
+  }
+  try {
+    const manifest = loadSandboxManifest(root, options.agentGovernanceOverride);
+    enforceSandbox(manifest, taskMd);
+  } catch (e) {
+    return (e as Error).message;
   }
   return null;
 }
@@ -251,7 +279,7 @@ export function runGate(options: GateHookOptions = {}): GateHookResult {
   const taskMd = readFileSync(resolve(root, 'TASK.md'), 'utf8');
   const mutations = options.mutationsOverride ?? getWorkspaceMutations(root);
 
-  const preflightErr = runPreflightGates(mutations, taskMd, root);
+  const preflightErr = runPreflightGates(mutations, taskMd, root, options);
   if (preflightErr) return emptyErrResult(preflightErr, defaultRole);
 
   const worklogMd = readFileSync(resolve(root, 'WORKLOG.md'), 'utf8');
@@ -331,11 +359,24 @@ function renderShadowTokenBanner(err: string): void {
   bannerLine();
 }
 
+function renderSandboxBanner(err: string): void {
+  console.error('');
+  bannerLine();
+  console.error('=== SANDBOX CAPABILITY VIOLATION - HUMAN APPROVAL REQUIRED ===');
+  bannerLine();
+  console.error(err);
+  bannerLine();
+  console.error('  No compliance stamp written to shared/tester_input.json.');
+  console.error('  Append the listed APPROVE_* bullets to TASK.md by hand and re-run.');
+  bannerLine();
+}
+
 function renderErrorBanner(err: string): void {
   if (err.startsWith('[ILLEGAL_MUTATION]')) return renderIllegalMutationBanner(err);
   if (err.startsWith('[CRITICAL_FORGERY]')) return renderForgeryBanner(err);
   if (err.startsWith('[CODE_SLOP_DETECTED]')) return renderCodeSlopBanner(err);
   if (err.startsWith('[SHADOW_TOKEN_FORGERY]')) return renderShadowTokenBanner(err);
+  if (err.startsWith('[SANDBOX_CAPABILITY_VIOLATION]')) return renderSandboxBanner(err);
   console.error(`[gateHook][FAIL] ${err}`);
 }
 

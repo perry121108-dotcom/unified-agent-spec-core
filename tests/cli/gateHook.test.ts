@@ -409,6 +409,99 @@ describe('runGate — Phase 13 codeSlop BLOCK paths', () => {
   });
 });
 
+const SANDBOX_TASK_WITH_APPROVAL =
+  '# TASK\n- [x] ARCH_PLAN phase-17: ship sandbox oracle\n- [x] APPROVE_HIGH_RISK: phase-17: vetted by human\n- [x] APPROVE_OUTBOUND_ACCESS: phase-17: vetted egress\n';
+
+const HIGH_DANGER_OUTBOUND = JSON.stringify({
+  sandbox: {
+    allow_outbound: true,
+    allowed_paths: ['./src/*'],
+    danger_rating: 'high',
+  },
+});
+
+const LOW_DANGER = JSON.stringify({
+  sandbox: {
+    allow_outbound: false,
+    allowed_paths: ['./src/*'],
+    danger_rating: 'low',
+  },
+});
+
+describe('runGate — Phase 17 sandbox PASS paths', () => {
+  it('SANDBOX PASS: low-danger manifest + clean TASK.md → gate releases (no approvals needed)', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    const res = runGate({
+      workspaceRoot: ws,
+      agentGovernanceOverride: LOW_DANGER,
+    });
+    expect(res.exitCode, `errors=${res.errors.join('|')}`).toBe(0);
+  });
+
+  it('SANDBOX SKIP: no agent-governance.json present → gate transparently passes through', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    const res = runGate({ workspaceRoot: ws });
+    expect(res.exitCode).toBe(0);
+    expect(res.errors).toEqual([]);
+  });
+});
+
+describe('runGate — Phase 17 sandbox BLOCK paths', () => {
+  it('SANDBOX BLOCK: high-danger + outbound manifest WITHOUT APPROVE bullets → exitCode 1 [SANDBOX_CAPABILITY_VIOLATION]', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    // Default setupWorkspace TASK.md has no APPROVE bullets at all.
+    const res = runGate({
+      workspaceRoot: ws,
+      agentGovernanceOverride: HIGH_DANGER_OUTBOUND,
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.errors[0]).toMatch(/\[SANDBOX_CAPABILITY_VIOLATION\]/);
+    expect(res.errors[0]).toContain('APPROVE_HIGH_RISK');
+    expect(res.errors[0]).toContain('APPROVE_OUTBOUND_ACCESS');
+    const stamped = JSON.parse(
+      readFileSync(join(ws, 'shared/tester_input.json'), 'utf8'),
+    );
+    expect(stamped.latest_compiled_payload).toBeUndefined();
+  });
+
+});
+
+describe('runGate — Phase 17 sandbox APPROVE-bullet resume path', () => {
+  it('SANDBOX RESUME: high-danger + outbound manifest + matching APPROVE bullets in TASK.md → gate releases', () => {
+    const ws = setupWorkspace({
+      currentRole: 'Builder',
+      nextRole: 'Tester',
+      evidence: VALID_LOG,
+      includePrompts: true,
+    });
+    workspaces.push(ws);
+    writeFileSync(join(ws, 'TASK.md'), SANDBOX_TASK_WITH_APPROVAL, 'utf8');
+    const res = runGate({
+      workspaceRoot: ws,
+      agentGovernanceOverride: HIGH_DANGER_OUTBOUND,
+    });
+    expect(res.exitCode, `errors=${res.errors.join('|')}`).toBe(0);
+  });
+});
+
 describe('gateHook — subprocess hard-block (process.exit verification)', () => {
   it('exits with code 1 when run as a script against a defective workspace', () => {
     const ws = setupWorkspace({
