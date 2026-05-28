@@ -144,6 +144,6 @@
 > 任務範圍：建立獨立適配層解決開源 AI agent 生態碎片化痛點。實作中間表示層 (IR, AgentSpecIR) 與雙向轉譯:Import 端解析 Cursor `.cursorrules` / Claude `CLAUDE.md` 軟性行為約束,自動套上 AgentCore 四道剛性鐵閘的最小權限包裹層;Export 端將 AgentCore 安全工作流節點轉譯為 LangGraph 狀態圖 JSON / Semantic Kernel plugin descriptor。零外部 AST 依賴,純靜態 JSON / 文字映射,核心欄位等冪無損。
 
 - [x] ARCH_PLAN phase-16-adapter: build bidirectional ecosystem spec adapter — AgentSpecIR canonical type + cursorrules/CLAUDE.md importers + LangGraph/Semantic Kernel exporters + least-privilege tier wrappers; zero external deps; dogfood by keeping all new .ts files under depth ≤ 4 + block ≤ 60
-- [ ] T16.1 於 `src/adapter/specAdapterCore.ts` 實作雙向規格轉譯 IR 核心與 Schema Mapping 引擎 [/]
-- [ ] T16.2 實作 Import 功能（解析 `.cursorrules` / `CLAUDE.md`）與 Export 功能（導出 LangGraph 狀態圖 / Semantic Kernel 描述） [/]
-- [ ] T16.3 於 `tests/` 追加 15 案以上規格轉譯等冪性與安全邊界包裹單元測試，執行 5-Gate 本地回歸 [/]
+- [x] T16.1 於 `src/adapter/specAdapterCore.ts` 實作雙向規格轉譯 IR 核心與 Schema Mapping 引擎 [Closed by Tester @ 2026-05-28]
+- [x] T16.2 實作 Import 功能（解析 `.cursorrules` / `CLAUDE.md`）與 Export 功能（導出 LangGraph 狀態圖 / Semantic Kernel 描述） [Closed by Tester @ 2026-05-28]
+- [x] T16.3 於 `tests/` 追加 15 案以上規格轉譯等冪性與安全邊界包裹單元測試，執行 5-Gate 本地回歸 [Closed by Tester @ 2026-05-28]

@@ -2067,3 +2067,15 @@ scanned 2 / violations 0
 ### 預期下一步
 
 Tester Session 接手執行五重門禁(build / lint / test 222 / scan / build:dist),確認 T16.1 / T16.2 / T16.3 三條任務由 `[/]` 升為 `[x]`。
+
+---
+
+## 2026-05-28 — Tester 正式驗收 (Phase 16 Ecosystem Spec Adapter)
+
+✅ Tester 正式驗收成功 @ 2026-05-28
+- 實測 5-Gate Staircase 全數 exit 0,累積 15 個測試檔案、222 案測試 100% 全綠通過。
+- 雙向轉譯適配層完整就位:`importFromCursorRules` / `importFromClaudeMd` 解析軟性 markdown 規則 + 啟發式分類器自動掛接 AgentCore 四 Tier 最小權限包裹;`exportToLangGraph` / `exportToSemanticKernel` 把 IR 投影回 LangChain / 微軟 SK 生態。
+- 27 案測試覆蓋:categorize 啟發式 5 + tier mapping 5 + cursor import 6 + claude import (含 CRLF 雙行尾) 2 + injectTierWrappers 等冪性 2 + LangGraph export 3 + SK export 2 + round-trip 等冪性 2。
+- Phase 12/13/14/16 四層自舉 dogfood 鏈條延續至第五層:adapter 主檔與測試檔同時通過 depth ≤ 4 + block ≤ 60 codeSlop 幾何約束;生態適配層證明自己在 AgentCore 自家鐵閘下亦能合規誕生。
+
+> Phase 16 (Ecosystem Spec Adapter) 結案狀態:**Closed by Tester @ 2026-05-28**(五重機器驗證 exit=0 × 5;Test Files 15 / Tests 222 passed;DEP0190=0;scan baseline `scanned=22 findings=39 fail=33 warn=6` 與 Phase 11/12/13/14a/14-complete 逐字節一致;commit `94307cc` 已推流;跨生態翻譯成本歸零)
