@@ -3,9 +3,9 @@
 > 跨語言多代理人 (Multi-Agent) **進程級零信任監獄控制台** — 把「Builder / Tester / 上游調研 / 提示詞外部化 / 設計意圖 / 代碼幾何 / 證據真實性」全部從口頭約定升格為 OS 進程級 `exit 1` 物理阻斷。AI 沒得偷懶,人類不必看戲。
 
 [![CI](https://github.com/perry121108-dotcom/unified-agent-spec-core/actions/workflows/ci.yml/badge.svg)](https://github.com/perry121108-dotcom/unified-agent-spec-core/actions/workflows/ci.yml)
-[![version](https://img.shields.io/badge/version-0.8.0-blue)](./package.json)
+[![version](https://img.shields.io/badge/version-1.0.0-blue)](./package.json)
 [![node](https://img.shields.io/badge/node-%E2%89%A520.x-339933)](https://nodejs.org/)
-[![tests](https://img.shields.io/badge/tests-166%20passed-brightgreen)](./tests)
+[![tests](https://img.shields.io/badge/tests-249%20passed%20%2F%2016%20files-brightgreen)](./tests)
 
 ---
 
@@ -21,16 +21,17 @@ AI 多代理人協作流程最大的失敗模式不是「能力不足」,而是 
 
 ---
 
-## 🛡️ 核心治理矩陣:四道剛性不變式鐵閘 (The 4-Tier Matrix)
+## 🛡️ 核心治理矩陣:大一統 5-Tier 瀑布矩陣 (The 5-Tier Waterfall Matrix)
 
-`agent-core check` 在 commit 前一毫秒按以下順序瀑布式啟動。**任何一道失敗 ⇒ `process.exit(1)`,不寫合規戳記**,代理人補完缺失後重跑即可放行(可逆撤回)。
+`agent-core check` 在 commit 前一毫秒按以下順序瀑布式啟動:**Intent Gate ➔ Geometry Gate ➔ Sandbox Oracle ➔ Forgery Oracle ➔ Schema Validator**。**任何一道失敗 ⇒ `process.exit(1)`,不寫合規戳記**,代理人補完缺失後重跑即可放行(可逆撤回)。
 
 | Tier | 鐵閘 | 階段 | 觸發物 | 物理阻斷錯誤碼 |
 |---|---|---|---|---|
 | **1** | **Intent Gate** (前置設計錨定門禁) | Phase 12 | `src/`/`tests/` 變更 + `TASK.md` 內未勾選 `- [x] ARCH_PLAN` | **`[ILLEGAL_MUTATION]`** |
 | **2** | **Geometry Gate** (決定性代碼密度神諭) | Phase 13 | 任一 `.ts`/`.js` 變更檔內巢狀深度 > 4 或單一 `{...}` 區塊有效行數 > 60 | **`[CODE_SLOP_DETECTED]`** |
-| **3** | **Forgery Oracle** (多語言語意防偽神諭) | Phase 10 & 11 | `<Execution_Evidence>` 內 scanned ticks ≠ declared passed,或無法識別的 runner | **`[CRITICAL_FORGERY]`** |
-| **4** | **Runtime Validator** (JSON Schema 狀態機校驗) | Phase 1-3 | `delivery_schema` 違反:越權交接 / 漏 prompts / 證據過短 / 漏欄位 | (per-rule 訊息) |
+| **3 (a.k.a. Pre-flight Tier 1.5)** | **Sandbox Oracle** (聲明式安全沙箱與非對稱審批流) | Phase 17 | `agent-governance.json` 內 `sandbox.danger_rating === "high"` 或 `allow_outbound === true`,且 `TASK.md` 缺對應 `- [x] APPROVE_*` 人類手工簽收 bullet | **`[SANDBOX_CAPABILITY_VIOLATION]`** |
+| **4** | **Forgery Oracle** (多語言語意防偽 + 影武者重放防線) | Phase 10 & 11 & 14 | `<Execution_Evidence>` 內 scanned ticks ≠ declared passed,或 `shadow_token` 與當前 HEAD SHA + minute + fingerprint 雜湊不匹配 | **`[CRITICAL_FORGERY]`** / **`[SHADOW_TOKEN_FORGERY]`** |
+| **5** | **Schema Validator** (JSON Schema 狀態機校驗) | Phase 1-3 | `delivery_schema` 違反:越權交接 / 漏 prompts / 證據過短 / 漏欄位 | (per-rule 訊息) |
 
 ### Tier 1: Intent Gate (Phase 12 前置設計錨定門禁)
 
@@ -44,7 +45,23 @@ $$\text{nesting\_depth} \le 4 \quad \land \quad \text{block\_effective\_lines} \
 
 全面擊落功能正確但不堪入目的低密度技術債垃圾代碼(AI Slop)。
 
-### Tier 3: Forgery Oracle (Phase 10 & 11 多語言語意防偽神諭)
+### Tier 3: Sandbox Oracle (Phase 17 聲明式安全沙箱與非對稱審批流)
+
+防禦面從「靜態原始碼品質與防偽」**跨越至 AI 執行期行為防火牆**。專案於 `agent-governance.json` 內宣告 **Capability Manifest**:
+
+```json
+"sandbox": {
+  "allow_outbound": false,
+  "allowed_paths": ["./src/*"],
+  "danger_rating": "high"
+}
+```
+
+Pre-flight 讀取清單,若觸及高危旗標(`danger_rating === "high"` 或 `allow_outbound === true`),系統**不得自動放行** — 必須在 `TASK.md` 內出現對應**人類手工簽收**的 `- [x] APPROVE_HIGH_RISK` / `- [x] APPROVE_OUTBOUND_ACCESS` bullet,否則拋 `[SANDBOX_CAPABILITY_VIOLATION]` 並 `process.exit(1)` 物理擊落。
+
+**非對稱審批流(Asymmetric Approval Flow):** 機器只能 deny,只有人能 grant。Gate 失敗 → 退出 → 人類手工 keystroke 把 APPROVE bullet 貼進 TASK.md → 重跑 gate。**未經人類簽收絕無自動 resume**,徹底封死 AI 自我授權繞過的攻擊面。
+
+### Tier 4: Forgery Oracle (Phase 10 & 11 多語言語意防偽神諭 + Phase 14 影武者重放防線)
 
 盲測日誌特徵,以 mutex 安全的 `getStrategy()` 工廠自適應調度 **Vitest / Pytest / Jest / Cargo test** 的代數不變式校驗:
 
@@ -52,7 +69,7 @@ $$\text{scanned\_ticks} \equiv \text{declared\_passed}$$
 
 精確審查微觀 ticks 行數,封殺 AI「字串拼接偽造測試綠燈報告」的惡意合謀。錯誤訊息嵌入 `Runner=<name>` 子字串,單一程式碼路徑覆蓋四種測試框架。
 
-### Tier 4: Runtime Validator (Phase 1-3 JSON Schema 狀態機校驗)
+### Tier 5: Schema Validator (Phase 1-3 JSON Schema 狀態機校驗)
 
 硬核校驗角色狀態機交接負載(Delivery Schema):`prompt_externalization` / `execution_evidence_required` 硬鎖為 `true`;`next_role` 必須符合 5 角色狀態機允許的轉移;artifact 路徑必須真實存在於檔案系統。防止越權與合規漏洞。
 
@@ -129,15 +146,18 @@ src/
   bin/agent-core.ts              # CLI entry (init / check / help)
   cli/
     bootstrap.ts                 # init 命令:scaffold + CI workflow 產出
-    gateHook.ts                  # check 命令:四道閘口編排 (T1→T4 瀑布)
+    gateHook.ts                  # check 命令:五道閘口編排 (T1→T5 瀑布)
   compiler/specCompiler.ts       # Markdown → Handoff 編譯器 + FeatureSpec bridge
   validator/
-    schemaValidator.ts           # Tier 4: JSON Schema 執行期校驗
-    semanticValidator.ts         # Tier 3: Phase 10 & 11 自適應多語言語意防偽 Oracle (策略模式工廠)
+    schemaValidator.ts           # Tier 5: JSON Schema 執行期校驗
+    semanticValidator.ts         # Tier 4: Phase 10 & 11 自適應多語言語意防偽 Oracle (策略模式工廠)
+    shadowWarriorOracle.ts       # Tier 4: Phase 14 時序鹽 + 源碼指紋密碼學雙重綁定 (replay 防線)
+    sandboxOracle.ts             # Tier 3: Phase 17 聲明式 Capability Manifest + 非對稱審批流
     archPlanValidator.ts         # Tier 1: Phase 12 前置設計錨定門禁
   linter/
     codeSlopLinter.ts            # Tier 2: Phase 13 字元級 6 模態狀態機,深度 + 區塊行數雙不變式
     (R1/R2/R3 規則引擎)         # Phase 1 規範規則引擎
+  adapter/specAdapterCore.ts     # Phase 16 雙向生態橋:.cursorrules / CLAUDE.md import + LangGraph / Semantic Kernel export
   config/agentWorkflowRegistry.ts # 5 角色狀態機 (AI_SOP_STATE_MACHINE)
   templates/ci-workflow.tpl.yml  # GitHub Actions CI Gate 範本
   types/types.ts                 # 大一統強型別藍圖
@@ -145,7 +165,7 @@ src/
 prompts/
   adversarial_auditor.txt        # 御用反對者 (Devil's Advocate) 隔離人格契約
 
-tests/                            # vitest:166 案,涵蓋 linter/validator/cli/integration
+tests/                            # vitest:249 案,16 個測試檔案
 ```
 
 ---
@@ -216,8 +236,12 @@ declared aggregate.
 2. **下游產品線剛性門禁 (`zhiyin-app`)**:
    在實體 Next.js 履歷求職顧問專案(`zhiyin-app`)的 Phase 5 至 Phase 7 核心研發週期中,`agent-core` 部署為本地 Git Hook 與雲端 GitHub Actions 門禁。**在真實開發歷程中,累計精確攔截 AI 代理人「越權交接」、「漏報測試數據」以及「空包彈日誌提交」共 14 次**。
 
-3. **核心內核 Meta-recursive Dogfooding 自證**:
-   Phase 12 (Intent Gate) 與 Phase 13 (Geometry Gate) 的**建立鐵閘的 commit 本身先通過鐵閘** — Phase 12 commit `5a62277` 自帶 `- [x] ARCH_PLAN phase-12` 並通過 archPlanValidator;Phase 13 commit `bd60278` 的 4 個變更 `.ts` 檔同時通過 depth ≤ 4 + block ≤ 60 雙重幾何約束。**鐵閘證明自己有能力證明自己** — 這是治理工具的終極合法性。
+3. **核心內核 Meta-recursive Dogfooding 自證(五層自舉鏈)**:
+   - Phase 12 (Intent Gate):commit `5a62277` 自帶 `- [x] ARCH_PLAN phase-12` 通過 archPlanValidator
+   - Phase 13 (Geometry Gate):commit `bd60278` 的 4 個變更 `.ts` 檔同時通過 depth ≤ 4 + block ≤ 60
+   - Phase 14 (Shadow Warrior):commit `c8d030a` 自帶 shadow_token 通過時序鹽 + 指紋雙重綁定
+   - Phase 16 (Spec Adapter):commit `94307cc` 的 IR 模組自身通過 codeSlop
+   - **Phase 17 (Sandbox Oracle) — 終極自證戰果**:commit `51a2e47` 初次實作時,兩個 describe 區塊各超出 60 行(70 / 78 effective lines),**被 Phase 13 自身鐵閘在 Commit 前一毫秒擊落**;重構為更小的子 describe 後通過全綠。**鐵閘連自己都殺**,逼自己重寫成符合幾何約束的形態。這是治理工具的終極合法性 — 不是「能擋外人」,而是「擋自己時毫不留情」。
 
 ---
 
@@ -232,9 +256,12 @@ declared aggregate.
 | 6 | Upstream Orchestration & CI Gate | GitHub Actions workflow + FeatureSpec → AC 自動編譯 |
 | 8 | Windows Runtime Refinement | 消除 `DEP0190`,`shell:false` 純淨執行 |
 | 10 | Semantic Forgery Oracle (Vitest) | `validateLogStructure` + 御用反對者人格契約 |
-| **11** | **Multi-language Strategy Matrix** | `TestParserStrategy` × 4 runners (Vitest/Pytest/Jest/Cargo) + mutex 工廠 |
-| **12** | **Pre-flight Architecture Plan Gate** | `archPlanValidator` + `getWorkspaceMutations` + `[ILLEGAL_MUTATION]` |
-| **13** | **Deterministic Code Slop Linter** | `codeSlopLinter` + 6 模態字元狀態機 + `[CODE_SLOP_DETECTED]` |
+| 11 | Multi-language Strategy Matrix | `TestParserStrategy` × 4 runners (Vitest/Pytest/Jest/Cargo) + mutex 工廠 |
+| 12 | Pre-flight Architecture Plan Gate | `archPlanValidator` + `getWorkspaceMutations` + `[ILLEGAL_MUTATION]` |
+| 13 | Deterministic Code Slop Linter | `codeSlopLinter` + 6 模態字元狀態機 + `[CODE_SLOP_DETECTED]` |
+| 14 | Shadow Warrior Replay Defense | `shadowWarriorOracle` + 時序鹽 + 源碼指紋雙重綁定 + `[SHADOW_TOKEN_FORGERY]` |
+| 16 | Ecosystem Bidirectional Adapter | `specAdapterCore` + cursor/CLAUDE import + LangGraph/Semantic Kernel export + 最小權限 tier 包裹層 |
+| **17** | **Declarative Sandbox + Asymmetric Approval (v1.0.0 GA)** | `sandboxOracle` + Capability Manifest + 人類手工 `APPROVE_*` bullet + `[SANDBOX_CAPABILITY_VIOLATION]` |
 
 詳細交付歷史:見 [`TASK.md`](./TASK.md) 與 [`WORKLOG.md`](./WORKLOG.md)。
 
@@ -246,7 +273,7 @@ declared aggregate.
 npm run build      # tsc --noEmit(型別檢查,不 emit)
 npm run build:dist # 真正產出 dist/ + 拷貝模板資產
 npm run lint       # eslint
-npm test           # vitest run(166 cases,13 test files)
+npm test           # vitest run(249 cases,16 test files)
 npm run scan       # 對 inputs/ 跑 linter 並輸出 reports/lint-report.md
 npm run gate       # 直接跑 src/cli/gateHook.ts(等同 dist 的 check)
 ```
@@ -263,10 +290,18 @@ CI:[.github/workflows/ci.yml](.github/workflows/ci.yml) — `push: main` / `pull
 
 ## 路線圖
 
+**v1.0.0 GA — 大結局已完整定格**(2026-05-28):
 - ✅ Phase 10 (semanticValidator + Vitest oracle) — closed v0.6.0
 - ✅ Phase 11 (多語言 evidence parser:pytest / jest / cargo test) — closed v0.7.0
-- ✅ Phase 12 (Pre-flight Architecture Plan Gate) — closed
+- ✅ Phase 12 (Pre-flight Architecture Plan Gate) — closed v0.8.0
 - ✅ Phase 13 (Deterministic Code Slop Linter) — closed v0.8.0
-- ⏳ Phase 14:Git pre-commit hook auto-install(讓 `agent-core init` 自動掛 `.husky/`)
-- ⏳ Phase 15:VS Code 擴充 — 編輯器內即時 lint TASK / WORKLOG / 即時顯示四 Tier 狀態
-- ⏳ Phase 16:第 5 Tier 候選 — 依賴圖反向影響面分析(import graph reverse impact)
+- ✅ Phase 14a (Vitest inline-test regex hotfix) — closed v0.8.1
+- ✅ Phase 14 Complete (Shadow Warrior temporal salt + fingerprint) — closed v0.9.0
+- ✅ Phase 16 (Ecosystem Bidirectional Spec Adapter) — closed
+- ✅ **Phase 17 (Declarative Sandbox + Asymmetric Approval)** — **closed v1.0.0 GA** ⭐
+
+**v1.x 後續候選**:
+- ⏳ Husky v10 升級(自動 init 階段直接生 v10 規範 hook)
+- ⏳ VS Code 擴充 — 編輯器內即時 lint TASK / WORKLOG / 即時顯示 5 Tier 狀態
+- ⏳ 依賴圖反向影響面分析(import graph reverse impact)
+- ⏳ 更多生態系適配器(Cline / Aider / Roo Code)
