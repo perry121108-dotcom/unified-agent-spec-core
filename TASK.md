@@ -154,6 +154,6 @@
 > 任務範圍：把 AgentCore 防禦面由「靜態源碼品質與防偽」推進到「執行期行為防火牆」。新增 Pre-flight Tier「沙箱神諭」於 archPlan + codeSlop 之後。`agent-governance.json` 內 `sandbox` 區段宣告 Capability Manifest;Pre-flight 讀清單,若 `danger_rating === "high"` 或 `allow_outbound === true`,要求 TASK.md 內出現對應 `- [x] APPROVE_*` 人類手工簽收 bullet;否則拋 `[SANDBOX_CAPABILITY_VIOLATION]` 並 exit 1。**未經人類 keystroke 不得自動 resume** — 這是「非對稱審批流」。
 
 - [x] ARCH_PLAN phase-17-sandbox: implement declarative capability sandbox oracle with asymmetric human approval flow; integrate into Pre-flight after codeSlop; banner [SANDBOX_CAPABILITY_VIOLATION]; dogfood by keeping all new .ts files under depth ≤ 4 + block ≤ 60
-- [ ] T17.1 於 `src/validator/sandboxOracle.ts` 實作聲明式 Manifest 解析與危險評級靜態審查器 [/]
-- [ ] T17.2 於 `gateHook.ts` 實作進程級 Suspend 審批流，結合 `TASK.md` 錨定攔截 `[SANDBOX_CAPABILITY_VIOLATION]` [/]
-- [ ] T17.3 於 `tests/` 追加 18 案以上高危外發、路徑越權、人工開閘等對抗性測試，執行 5-Gate 本地回歸 [/]
+- [x] T17.1 於 `src/validator/sandboxOracle.ts` 實作聲明式 Manifest 解析與危險評級靜態審查器 [Closed by Tester @ 2026-05-28]
+- [x] T17.2 於 `gateHook.ts` 實作進程級 Suspend 審批流，結合 `TASK.md` 錨定攔截 `[SANDBOX_CAPABILITY_VIOLATION]` [Closed by Tester @ 2026-05-28]
+- [x] T17.3 於 `tests/` 追加 18 案以上高危外發、路徑越權、人工開閘等對抗性測試，執行 5-Gate 本地回歸 [Closed by Tester @ 2026-05-28]

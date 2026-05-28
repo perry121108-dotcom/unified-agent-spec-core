@@ -2131,3 +2131,15 @@ scanned 4 / violations 0
 ### 預期下一步
 
 Tester Session 接手執行五重門禁(build / lint / test 249 / scan / build:dist),確認 T17.1 / T17.2 / T17.3 三條任務由 `[/]` 升為 `[x]`,並簽發 **v1.0.0** 正式版 annotated tag,為 v1 大結局定格。
+
+---
+
+## 2026-05-28 — Tester 正式驗收 (Phase 17 Declarative Sandbox Oracle)
+
+✅ Tester 正式驗收成功 @ 2026-05-28
+- 實測 5-Gate Staircase 全數 exit 0,累積 16 個測試檔案、249 案測試 100% 全綠通過。
+- 聲明式 Capability Manifest schema 嚴格驗證(allow_outbound / allowed_paths / danger_rating 三欄位漂移即視為 null);非對稱審批流經 23 案 sandbox oracle + 4 案 gateHook integration 完整覆蓋(PASS low-danger / SKIP no-manifest / BLOCK no-approval / RESUME with bullets)。
+- Phase 17 commit `51a2e47` 真實演示「鐵閘擋自己」:首次測試實作時兩個 describe 區塊各超出 60 行(70 / 78 effective lines),被 Phase 13 codeSlop 在 dogfood 階段直接擊落;重構為更小的 describe 子塊後通過全綠。第五層 Meta-recursive Dogfood 鏈條由 Phase 12 → 13 → 14 → 16 → 17 連續延展,無斷裂。
+- v1.0.0 大結局:五道 Tier 並列(intent / geometry / capability / forgery / shadow + schema final + adapter ecosystem),零信任進程級 AI 監獄管理學定格。
+
+> Phase 17 (Declarative Sandbox Oracle) 結案狀態:**Closed by Tester @ 2026-05-28**(五重機器驗證 exit=0 × 5;Test Files 16 / Tests 249 passed;DEP0190=0;scan baseline `scanned=22 findings=39 fail=33 warn=6` 與 Phase 11/12/13/14/16 逐字節一致;commit `51a2e47` 已推流;v1.0.0 GA 大結局)
